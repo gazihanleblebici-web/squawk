@@ -32,7 +32,7 @@ export default function ScheduleScreen() {
 
     const { data: boardData } = await supabase
       .from('boards')
-      .select('*, positions(*), users!boards_user_id_fkey(*)')
+      .select('*, positions(*), users!boards_user_id_fkey(*), ojti:users!boards_ojti_user_id_fkey(*)')
       .eq('schedule_id', schedule.id)
       .order('start_zulu', { ascending: true });
 
@@ -93,6 +93,24 @@ export default function ScheduleScreen() {
                 </View>
                 {orderedPositions.map(pos => {
                   const board = getBoardFor(time, pos);
+                  const hasOjti = board?.ojti;
+
+                  if (hasOjti) {
+                    return (
+                      <View key={pos} style={styles.ojtiCell}>
+                        <View style={[styles.ojtiHalf, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
+                          <Text style={styles.dataCellText}>{board.users?.initial}</Text>
+                        </View>
+                        <View style={[styles.ojtiHalf, { backgroundColor: board.ojti?.color_hex || '#f1f5f9' }]}>
+                          <Text style={styles.dataCellText}>{board.ojti?.initial}</Text>
+                        </View>
+                        <View style={styles.ojtiBadge}>
+                          <Text style={styles.ojtiBadgeIcon}>🤝</Text>
+                        </View>
+                      </View>
+                    );
+                  }
+
                   return (
                     <View
                       key={pos}
@@ -118,12 +136,20 @@ export default function ScheduleScreen() {
 
 const CELL_BORDER = '#0f1e35';
 
-const cellShadow = {
+const cellShadowBase = {
+  borderTopWidth: 1.5,
+  borderLeftWidth: 1.5,
+  borderTopColor: 'rgba(255,255,255,0.6)',
+  borderLeftColor: 'rgba(255,255,255,0.6)',
+  borderRightWidth: 1.5,
+  borderBottomWidth: 1.5,
+  borderRightColor: 'rgba(0,0,0,0.15)',
+  borderBottomColor: 'rgba(0,0,0,0.2)',
   shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.15,
-  shadowRadius: 3,
-  elevation: 3,
+  shadowOffset: { width: 1, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 2,
+  elevation: 4,
 };
 
 const styles = StyleSheet.create({
@@ -178,19 +204,41 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: 'rgba(255,255,255,0.6)',
-    borderLeftColor: 'rgba(255,255,255,0.6)',
-    borderRightWidth: 1.5,
-    borderBottomWidth: 1.5,
-    borderRightColor: 'rgba(0,0,0,0.15)',
-    borderBottomColor: 'rgba(0,0,0,0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 1, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 4,
+    ...cellShadowBase,
   },
   dataCellText: { fontSize: 15, fontWeight: '800', color: '#1a2744' },
+  ojtiCell: {
+    width: 76,
+    height: 48,
+    flexDirection: 'row',
+    ...cellShadowBase,
+    overflow: 'hidden',
+  },
+  ojtiHalf: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ojtiBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: 14,
+    borderRightWidth: 14,
+    borderTopColor: '#7c3aed',
+    borderRightColor: '#7c3aed',
+    borderLeftWidth: 14,
+    borderLeftColor: 'transparent',
+    borderBottomWidth: 14,
+    borderBottomColor: 'transparent',
+  },
+  ojtiBadgeIcon: {
+    position: 'absolute',
+    top: -12,
+    right: -2,
+    fontSize: 9,
+  },
 });
