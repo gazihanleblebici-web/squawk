@@ -56,10 +56,7 @@ export default function ScheduleScreen() {
     );
   }
 
-  // Saatleri grupla
   const timeSlots = [...new Set(boards.map(b => b.start_zulu))].sort();
-
-  // Pozisyon kodlarını al
   const positionCodes = [...new Set(boards.map(b => b.positions?.code).filter(Boolean))];
   const orderedPositions = POSITION_ORDER.filter(p => positionCodes.includes(p));
 
@@ -77,22 +74,18 @@ export default function ScheduleScreen() {
         <Text style={styles.headerStatus}>Onaylı Program</Text>
       </View>
 
-      <ScrollView horizontal>
-        <View>
-          {/* Başlık satırı */}
-          <View style={styles.row}>
-            <View style={styles.timeCell}>
-              <Text style={styles.headerCellText}></Text>
+      <ScrollView style={styles.tableScroll}>
+        <ScrollView horizontal contentContainerStyle={styles.tableScrollContent}>
+          <View style={styles.tableWrap}>
+            <View style={styles.row}>
+              <View style={styles.cornerCell} />
+              {orderedPositions.map(pos => (
+                <View key={pos} style={styles.posHeaderCell}>
+                  <Text style={styles.posHeaderText}>{pos}</Text>
+                </View>
+              ))}
             </View>
-            {orderedPositions.map(pos => (
-              <View key={pos} style={styles.posHeaderCell}>
-                <Text style={styles.posHeaderText}>{pos}</Text>
-              </View>
-            ))}
-          </View>
 
-          {/* Veri satırları */}
-          <ScrollView>
             {timeSlots.map(time => (
               <View key={time} style={styles.row}>
                 <View style={styles.timeCell}>
@@ -105,7 +98,7 @@ export default function ScheduleScreen() {
                       key={pos}
                       style={[
                         styles.dataCell,
-                        { backgroundColor: board?.users?.color_hex || '#f1f5f9' }
+                        { backgroundColor: board?.users?.color_hex || '#f1f5f9' },
                       ]}
                     >
                       <Text style={styles.dataCellText}>
@@ -116,12 +109,22 @@ export default function ScheduleScreen() {
                 })}
               </View>
             ))}
-          </ScrollView>
-        </View>
+          </View>
+        </ScrollView>
       </ScrollView>
     </View>
   );
 }
+
+const CELL_BORDER = '#0f1e35';
+
+const cellShadow = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.15,
+  shadowRadius: 3,
+  elevation: 3,
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f7fb' },
@@ -131,35 +134,63 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', letterSpacing: 2 },
   headerSub: { fontSize: 12, color: '#93c5fd', marginTop: 4 },
   headerStatus: { fontSize: 12, color: '#4ade80', marginTop: 6, fontWeight: '600' },
-  row: { flexDirection: 'row' },
-  timeCell: {
-    width: 50,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e8eef6',
-    borderWidth: 0.5,
-    borderColor: '#cbd5e1',
+  tableScroll: { flex: 1 },
+  tableScrollContent: { padding: 20, paddingBottom: 120 },
+  tableWrap: {
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  timeCellText: { fontSize: 11, fontWeight: '700', color: '#1a2744' },
-  headerCellText: { fontSize: 11 },
-  posHeaderCell: {
-    width: 70,
-    height: 44,
+  row: { flexDirection: 'row' },
+  cornerCell: {
+    width: 56,
+    height: 48,
+    backgroundColor: '#1a2744',
+    borderWidth: 1,
+    borderColor: CELL_BORDER,
+    borderTopLeftRadius: 10,
+  },
+  timeCell: {
+    width: 56,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1a2744',
-    borderWidth: 0.5,
-    borderColor: '#0f1e35',
+    borderWidth: 1,
+    borderColor: CELL_BORDER,
   },
-  posHeaderText: { fontSize: 10, fontWeight: '700', color: '#ffffff' },
-  dataCell: {
-    width: 70,
-    height: 44,
+  timeCellText: { fontSize: 12, fontWeight: '800', color: '#ffffff' },
+  posHeaderCell: {
+    width: 76,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 0.5,
-    borderColor: '#cbd5e1',
+    backgroundColor: '#1a2744',
+    borderWidth: 1,
+    borderColor: CELL_BORDER,
   },
-  dataCellText: { fontSize: 13, fontWeight: '800', color: '#1a2744' },
+  posHeaderText: { fontSize: 11, fontWeight: '800', color: '#ffffff', letterSpacing: 0.5 },
+  dataCell: {
+    width: 76,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: 'rgba(255,255,255,0.6)',
+    borderLeftColor: 'rgba(255,255,255,0.6)',
+    borderRightWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderRightColor: 'rgba(0,0,0,0.15)',
+    borderBottomColor: 'rgba(0,0,0,0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 4,
+  },
+  dataCellText: { fontSize: 15, fontWeight: '800', color: '#1a2744' },
 });
