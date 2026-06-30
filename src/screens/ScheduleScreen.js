@@ -16,9 +16,35 @@ const STATUS_LABELS = {
   hourly_leave: { label: 'Saatlik İzinli', color: '#db2777' },
 };
 
+// GECE KURALLARI:
+// 16Z-21Z: 1. Blok, 5 pozisyon kesin açık (saatlik rotasyon)
+// 21Z-00Z: GECECİ bloğu, tek blok, genelde 2 kişi
+// 00Z-02:30Z: ARACI bloğu, tek blok, genelde 2 kişi
+// 02:30Z-06Z: SABAHÇI bloğu, yoğun, kaydırmalı olabilir (yaz modu)
+const OFFSET_START = '02:30:00';
+const BLOCK1_END = '21:00:00';
+const ARACI_START = '00:00:00';
+
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}, ${DAY_NAMES[d.getDay()]}`;
+}
+
+function sortNightAware(a, b) {
+  const an = a < '06:00:00' ? 1 : 0;
+  const bn = b < '06:00:00' ? 1 : 0;
+  if (an !== bn) return an - bn;
+  return a.localeCompare(b);
+}
+
+function timeToMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function isInOffsetRange(startZulu) {
+  if (startZulu >= OFFSET_START && startZulu < '06:00:00') return true;
+  return false;
 }
 
 export default function ScheduleScreen() {
@@ -44,6 +70,13 @@ export default function ScheduleScreen() {
       .select('id')
       .eq('shift_type', shiftType)
       .single();
+
+    if (!shiftRow) {
+      setScheduleInfo(null);
+      setBoards([]);
+      setLoading(false);
+      return;
+    }
 
     const { data: schedule } = await supabase
       .from('schedules')
@@ -82,12 +115,57 @@ export default function ScheduleScreen() {
     setLoading(false);
   }
 
-  const timeSlots = [...new Set(boards.map(b => b.start_zulu))].sort();
+  const isOffsetMode = shiftType === 'night' && scheduleInfo?.is_offset_morning;
+
+  // Bölüm 1: 16Z - 21Z (saatlik rotasyon)
+  const block1Boards = boards.filter(b => b.start_zulu < BLOCK1_END);
+  // Bölüm 2: 21Z - 00Z (gececi, tek blok)
+  const gececiBoards = boards.filter(b => b.start_zulu === BLOCK1_END);
+  // Bölüm 3: 00Z - 02:30Z (aracı, tek blok)
+  const araciBoards = boards.filter(b => b.start_zulu === ARACI_START);
+  // Bölüm 4: 02:30Z - 06Z (sabahçı, offset modunda kaydırmalı)
+  const sabahciBoards = boards.filter(b => isInOffsetRange(b.start_zulu));
+
+  const timeSlots = [...new Set(block1Boards.map(b => b.start_zulu))].sort(sortNightAware);
   const positionCodes = [...new Set(boards.map(b => b.positions?.code).filter(Boolean))];
   const orderedPositions = POSITION_ORDER.filter(p => positionCodes.includes(p));
 
   function getBoardFor(time, posCode) {
-    return boards.find(b => b.start_zulu === time && b.positions?.code === posCode);
+    return block1Boards.find(b => b.start_zulu === time && b.positions?.code === posCode);
+  }
+
+  function renderSimpleBlock(blockBoards, title) {
+    if (blockBoards.length === 0) return null;
+    return (
+      <View style={styles.simpleBlockWrap}>
+        <Text style={styles.sectionLabel}>{title}</Text>
+        <View style={styles.simpleBlockRow}>
+          {blockBoards.map(board => (
+            <View key={board.id} style={[styles.simpleBlockChip, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
+              <Text style={styles.simpleBlockPos}>{board.positions?.code}</Text>
+              <Text style={styles.simpleBlockInitial}>{board.users?.initial}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  // Offset (sabahçı) timeline hesaplamaları
+  const offsetPositions = POSITION_ORDER.filter(p =>
+    sabahciBoards.some(b => b.positions?.code === p)
+  );
+  const timelineStartMin = timeToMinutes(OFFSET_START);
+  const timelineEndMin = timeToMinutes('06:00:00');
+  const timelineTotalMin = timelineEndMin - timelineStartMin;
+  const PX_PER_MIN = 2.2;
+  const timelineHeight = timelineTotalMin * PX_PER_MIN;
+  const hourMarks = ['02:30', '03:00', '03:30', '04:00', '04:30', '05:00', '05:30', '06:00'];
+
+  function getOffsetBoardsForPos(posCode) {
+    return sabahciBoards
+      .filter(b => b.positions?.code === posCode)
+      .sort((a, b) => a.start_zulu.localeCompare(b.start_zulu));
   }
 
   return (
@@ -134,62 +212,163 @@ export default function ScheduleScreen() {
               📋 Program Tarihi: {formatDate(scheduleInfo.schedule_date)}
             </Text>
             <Text style={styles.statusText}>✅ Onaylı Program</Text>
+            {isOffsetMode && (
+              <Text style={styles.offsetBadgeText}>🌊 02:30Z sonrası kaydırmalı rotasyon (yaz modu)</Text>
+            )}
           </View>
 
-          <ScrollView horizontal contentContainerStyle={styles.tableScrollContent}>
-            <View style={styles.tableWrap}>
-              <View style={styles.row}>
-                <View style={styles.cornerCell} />
-                {orderedPositions.map(pos => (
-                  <View key={pos} style={styles.posHeaderCell}>
-                    <Text style={styles.posHeaderText}>{pos}</Text>
+          {shiftType === 'day' ? (
+            <>
+              <Text style={styles.sectionLabel}>Gündüz Programı</Text>
+              <ScrollView horizontal contentContainerStyle={styles.tableScrollContent}>
+                <View style={styles.tableWrap}>
+                  <View style={styles.row}>
+                    <View style={styles.cornerCell} />
+                    {orderedPositions.map(pos => (
+                      <View key={pos} style={styles.posHeaderCell}>
+                        <Text style={styles.posHeaderText}>{pos}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
-
-              {timeSlots.map(time => (
-                <View key={time} style={styles.row}>
-                  <View style={styles.timeCell}>
-                    <Text style={styles.timeCellText}>{time.slice(0,5)}Z</Text>
+                  {timeSlots.map(time => (
+                    <View key={time} style={styles.row}>
+                      <View style={styles.timeCell}>
+                        <Text style={styles.timeCellText}>{time.slice(0,5)}Z</Text>
+                      </View>
+                      {orderedPositions.map(pos => {
+                        const board = getBoardFor(time, pos);
+                        const hasOjti = board?.ojti;
+                        if (hasOjti) {
+                          return (
+                            <View key={pos} style={styles.ojtiCell}>
+                              <View style={[styles.ojtiHalf, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
+                                <Text style={styles.dataCellText}>{board.users?.initial}</Text>
+                              </View>
+                              <View style={[styles.ojtiHalf, { backgroundColor: board.ojti?.color_hex || '#f1f5f9' }]}>
+                                <Text style={styles.dataCellText}>{board.ojti?.initial}</Text>
+                              </View>
+                              <View style={styles.ojtiBadge}>
+                                <Text style={styles.ojtiBadgeIcon}>🤝</Text>
+                              </View>
+                            </View>
+                          );
+                        }
+                        return (
+                          <View key={pos} style={[styles.dataCell, { backgroundColor: board?.users?.color_hex || '#f1f5f9' }]}>
+                            <Text style={styles.dataCellText}>{board?.users?.initial || ''}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            </>
+          ) : (
+            <>
+              <Text style={styles.sectionLabel}>16:00Z - 21:00Z (Saatlik Rotasyon)</Text>
+              <ScrollView horizontal contentContainerStyle={styles.tableScrollContent}>
+                <View style={styles.tableWrap}>
+                  <View style={styles.row}>
+                    <View style={styles.cornerCell} />
+                    {orderedPositions.map(pos => (
+                      <View key={pos} style={styles.posHeaderCell}>
+                        <Text style={styles.posHeaderText}>{pos}</Text>
+                      </View>
+                    ))}
                   </View>
-                  {orderedPositions.map(pos => {
-                    const board = getBoardFor(time, pos);
-                    const hasOjti = board?.ojti;
+                  {timeSlots.map(time => (
+                    <View key={time} style={styles.row}>
+                      <View style={styles.timeCell}>
+                        <Text style={styles.timeCellText}>{time.slice(0,5)}Z</Text>
+                      </View>
+                      {orderedPositions.map(pos => {
+                        const board = getBoardFor(time, pos);
+                        const hasOjti = board?.ojti;
+                        if (hasOjti) {
+                          return (
+                            <View key={pos} style={styles.ojtiCell}>
+                              <View style={[styles.ojtiHalf, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
+                                <Text style={styles.dataCellText}>{board.users?.initial}</Text>
+                              </View>
+                              <View style={[styles.ojtiHalf, { backgroundColor: board.ojti?.color_hex || '#f1f5f9' }]}>
+                                <Text style={styles.dataCellText}>{board.ojti?.initial}</Text>
+                              </View>
+                              <View style={styles.ojtiBadge}>
+                                <Text style={styles.ojtiBadgeIcon}>🤝</Text>
+                              </View>
+                            </View>
+                          );
+                        }
+                        return (
+                          <View key={pos} style={[styles.dataCell, { backgroundColor: board?.users?.color_hex || '#f1f5f9' }]}>
+                            <Text style={styles.dataCellText}>{board?.users?.initial || ''}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
 
-                    if (hasOjti) {
-                      return (
-                        <View key={pos} style={styles.ojtiCell}>
-                          <View style={[styles.ojtiHalf, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
-                            <Text style={styles.dataCellText}>{board.users?.initial}</Text>
+              {renderSimpleBlock(gececiBoards, '21:00Z - 00:00Z (Gececi)')}
+              {renderSimpleBlock(araciBoards, '00:00Z - 02:30Z (Aracı)')}
+
+              {isOffsetMode && sabahciBoards.length > 0 && (
+                <View style={styles.offsetSection}>
+                  <Text style={styles.sectionLabel}>02:30Z - 06:00Z (Sabahçı — Kaydırmalı)</Text>
+                  <ScrollView horizontal>
+                    <View style={styles.offsetTimelineWrap}>
+                      <View style={[styles.offsetTimeAxis, { height: timelineHeight + 36 }]}>
+                        <View style={styles.offsetTimeAxisSpacer} />
+                        {hourMarks.map(label => {
+                          const labelMin = timeToMinutes(label + ':00');
+                          const top = (labelMin - timelineStartMin) * PX_PER_MIN + 36;
+                          return (
+                            <View key={label} style={[styles.offsetTimeMark, { top: top - 7 }]}>
+                              <Text style={styles.offsetTimeMarkText}>{label}Z</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                      {offsetPositions.map(pos => (
+                        <View key={pos} style={styles.offsetColumn}>
+                          <View style={styles.offsetColumnHeader}>
+                            <Text style={styles.offsetColumnHeaderText}>{pos}</Text>
                           </View>
-                          <View style={[styles.ojtiHalf, { backgroundColor: board.ojti?.color_hex || '#f1f5f9' }]}>
-                            <Text style={styles.dataCellText}>{board.ojti?.initial}</Text>
-                          </View>
-                          <View style={styles.ojtiBadge}>
-                            <Text style={styles.ojtiBadgeIcon}>🤝</Text>
+                          <View style={[styles.offsetColumnBody, { height: timelineHeight }]}>
+                            {hourMarks.map(label => {
+                              const labelMin = timeToMinutes(label + ':00');
+                              const top = (labelMin - timelineStartMin) * PX_PER_MIN;
+                              return <View key={label} style={[styles.offsetGridLine, { top }]} />;
+                            })}
+                            {getOffsetBoardsForPos(pos).map(board => {
+                              const startMin = timeToMinutes(board.start_zulu);
+                              const endMin = timeToMinutes(board.end_zulu === '00:00:00' ? '06:00:00' : board.end_zulu);
+                              const top = (startMin - timelineStartMin) * PX_PER_MIN;
+                              const height = (endMin - startMin) * PX_PER_MIN;
+                              return (
+                                <View
+                                  key={board.id}
+                                  style={[styles.offsetBlock, { top, height: Math.max(height, 24), backgroundColor: board.users?.color_hex || '#f1f5f9' }]}
+                                >
+                                  <Text style={styles.offsetBlockInitial}>{board.users?.initial}</Text>
+                                </View>
+                              );
+                            })}
                           </View>
                         </View>
-                      );
-                    }
-
-                    return (
-                      <View
-                        key={pos}
-                        style={[
-                          styles.dataCell,
-                          { backgroundColor: board?.users?.color_hex || '#f1f5f9' },
-                        ]}
-                      >
-                        <Text style={styles.dataCellText}>
-                          {board?.users?.initial || ''}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                      ))}
+                    </View>
+                  </ScrollView>
                 </View>
-              ))}
-            </View>
-          </ScrollView>
+              )}
+
+              {!isOffsetMode && sabahciBoards.length > 0 && (
+                renderSimpleBlock(sabahciBoards, '02:30Z - 06:00Z (Sabahçı)')
+              )}
+            </>
+          )}
 
           {dayStatuses.length > 0 && (
             <View style={styles.summarySection}>
@@ -254,8 +433,19 @@ const styles = StyleSheet.create({
   statusBar: { paddingHorizontal: 16, paddingBottom: 4 },
   scheduleDateText: { fontSize: 13, color: '#1a2744', fontWeight: '700', marginBottom: 2 },
   statusText: { fontSize: 12, color: '#4ade80', fontWeight: '700' },
+  offsetBadgeText: { fontSize: 11, color: '#d97706', fontWeight: '700', marginTop: 4 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748b',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   tableScroll: { flex: 1 },
-  tableScrollContent: { padding: 16, paddingBottom: 16 },
+  tableScrollContent: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   tableWrap: {
     borderRadius: 12,
     shadowColor: '#000',
@@ -335,6 +525,65 @@ const styles = StyleSheet.create({
     right: -2,
     fontSize: 9,
   },
+  simpleBlockWrap: { paddingBottom: 8 },
+  simpleBlockRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 8 },
+  simpleBlockChip: {
+    width: 76,
+    height: 56,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  simpleBlockPos: { fontSize: 9, fontWeight: '700', color: '#1a2744', opacity: 0.7 },
+  simpleBlockInitial: { fontSize: 16, fontWeight: '800', color: '#1a2744', marginTop: 2 },
+  offsetSection: { paddingBottom: 16 },
+  offsetTimelineWrap: { flexDirection: 'row', paddingHorizontal: 16 },
+  offsetTimeAxis: { width: 50, position: 'relative' },
+  offsetTimeAxisSpacer: { height: 36 },
+  offsetTimeMark: { position: 'absolute', left: 0, right: 4 },
+  offsetTimeMarkText: { fontSize: 9, color: '#94a3b8', fontWeight: '700', textAlign: 'right' },
+  offsetColumn: { width: 80, marginLeft: 4 },
+  offsetColumnHeader: {
+    backgroundColor: '#1a2744',
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderRadius: 6,
+    marginBottom: 4,
+    height: 32,
+    justifyContent: 'center',
+  },
+  offsetColumnHeaderText: { fontSize: 10, fontWeight: '800', color: '#ffffff' },
+  offsetColumnBody: {
+    position: 'relative',
+    backgroundColor: '#e8eef6',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  offsetGridLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(148,163,184,0.3)',
+  },
+  offsetBlock: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  offsetBlockInitial: { fontSize: 14, fontWeight: '800', color: '#1a2744' },
   summarySection: { paddingHorizontal: 16, paddingBottom: 32 },
   summaryTitle: { fontSize: 14, fontWeight: '800', color: '#1a2744', marginBottom: 10 },
   summaryRow: {
