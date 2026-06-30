@@ -1,43 +1,55 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { supabase } from '../lib/supabase';
 
-const POSITION_ORDER = ['YWU', 'PLN', 'YZA', 'YZC', 'YZC_PLN'];
-
-export default function ScheduleScreen() {
-  const [boards, setBoards] = useState([]);
+export default function SettingsScreen() {
+  const [ojtiUsers, setOjtiUsers] = useState([]);
+  const [rateUsers, setRateUsers] = useState([]);
+  const [pairs, setPairs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [scheduleInfo, setScheduleInfo] = useState(null);
+  const [openDropdown, setOpenDropdown] = useState(null);
 
   useEffect(() => {
-    fetchSchedule();
+    fetchData();
   }, []);
 
-  async function fetchSchedule() {
-    const today = new Date().toISOString().split('T')[0];
-
-    const { data: schedule } = await supabase
-      .from('schedules')
-      .select('*, shifts(*)')
-      .eq('schedule_date', today)
-      .eq('status', 'approved')
-      .maybeSingle();
-
-    if (!schedule) {
-      setLoading(false);
-      return;
+  async function fetchData() {
+    const { data: allUsers } = await supabase.from('users').select('*');
+    if (allUsers) {
+      setOjtiUsers(allUsers.filter(u => u.is_ojti));
+      setRateUsers(allUsers.filter(u => !u.is_ojti && u.role !== 'chief'));
     }
 
-    setScheduleInfo(schedule);
+    const { data: pairData } = await supabase
+      .from('ojti_pairs')
+      .select('*, ojti:users!ojti_pairs_ojti_user_id_fkey(*), rate:users!ojti_pairs_rate_user_id_fkey(*)')
+      .eq('is_active', true);
 
-    const { data: boardData } = await supabase
-      .from('boards')
-      .select('*, positions(*), users!boards_user_id_fkey(*), ojti:users!boards_ojti_user_id_fkey(*)')
-      .eq('schedule_id', schedule.id)
-      .order('start_zulu', { ascending: true });
-
-    if (boardData) setBoards(boardData);
+    if (pairData) setPairs(pairData);
     setLoading(false);
+  }
+
+  async function updatePair(ojtiUserId, newRateUserId) {
+    const existing = pairs.find(p => p.ojti_user_id === ojtiUserId);
+
+    if (existing) {
+      await supabase
+        .from('ojti_pairs')
+        .update({ rate_user_id: newRateUserId })
+        .eq('id', existing.id);
+    } else {
+      await supabase
+        .from('ojti_pairs')
+        .insert({ ojti_user_id: ojtiUserId, rate_user_id: newRateUserId });
+    }
+
+    setOpenDropdown(null);
+    fetchData();
+  }
+
+  function getCurrentRate(ojtiUserId) {
+    const pair = pairs.find(p => p.ojti_user_id === ojtiUserId);
+    return pair ? pair.rate : null;
   }
 
   if (loading) {
@@ -48,197 +60,130 @@ export default function ScheduleScreen() {
     );
   }
 
-  if (!scheduleInfo) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.emptyText}>Bugün için onaylı program yok</Text>
-      </View>
-    );
-  }
-
-  const timeSlots = [...new Set(boards.map(b => b.start_zulu))].sort();
-  const positionCodes = [...new Set(boards.map(b => b.positions?.code).filter(Boolean))];
-  const orderedPositions = POSITION_ORDER.filter(p => positionCodes.includes(p));
-
-  function getBoardFor(time, posCode) {
-    return boards.find(b => b.start_zulu === time && b.positions?.code === posCode);
-  }
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>SQUAWK</Text>
-        <Text style={styles.headerSub}>
-          {scheduleInfo.schedule_date} - {scheduleInfo.shifts ? scheduleInfo.shifts.name : ''} Shift
-        </Text>
-        <Text style={styles.headerStatus}>Onaylı Program</Text>
+        <Text style={styles.headerTitle}>⚙️ Ayarlar</Text>
+        <Text style={styles.headerSub}>OJTI Eşleştirme Yönetimi</Text>
       </View>
 
-      <ScrollView style={styles.tableScroll}>
-        <ScrollView horizontal contentContainerStyle={styles.tableScrollContent}>
-          <View style={styles.tableWrap}>
-            <View style={styles.row}>
-              <View style={styles.cornerCell} />
-              {orderedPositions.map(pos => (
-                <View key={pos} style={styles.posHeaderCell}>
-                  <Text style={styles.posHeaderText}>{pos}</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.sectionTitle}>OJTI - Rate'li ATC Eşleştirmeleri</Text>
+        <Text style={styles.sectionSub}>Her OJTI için sabit asıl/yedek rate'li ATC seçin</Text>
+
+        {ojtiUsers.map(ojti => {
+          const currentRate = getCurrentRate(ojti.id);
+          const isOpen = openDropdown === ojti.id;
+
+          return (
+            <View key={ojti.id} style={styles.pairCard}>
+              <View style={styles.pairHeader}>
+                <View style={[styles.badge, { backgroundColor: ojti.color_hex }]}>
+                  <Text style={styles.badgeText}>{ojti.initial}</Text>
                 </View>
-              ))}
-            </View>
-
-            {timeSlots.map(time => (
-              <View key={time} style={styles.row}>
-                <View style={styles.timeCell}>
-                  <Text style={styles.timeCellText}>{time.slice(0,5)}Z</Text>
+                <View style={styles.pairInfo}>
+                  <Text style={styles.pairName}>{ojti.full_name}</Text>
+                  <Text style={styles.pairMeta}>OJTI</Text>
                 </View>
-                {orderedPositions.map(pos => {
-                  const board = getBoardFor(time, pos);
-                  const hasOjti = board?.ojti;
-
-                  if (hasOjti) {
-                    return (
-                      <View key={pos} style={styles.ojtiCell}>
-                        <View style={[styles.ojtiHalf, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
-                          <Text style={styles.dataCellText}>{board.users?.initial}</Text>
-                        </View>
-                        <View style={[styles.ojtiHalf, { backgroundColor: board.ojti?.color_hex || '#f1f5f9' }]}>
-                          <Text style={styles.dataCellText}>{board.ojti?.initial}</Text>
-                        </View>
-                        <View style={styles.ojtiBadge}>
-                          <Text style={styles.ojtiBadgeIcon}>🤝</Text>
-                        </View>
-                      </View>
-                    );
-                  }
-
-                  return (
-                    <View
-                      key={pos}
-                      style={[
-                        styles.dataCell,
-                        { backgroundColor: board?.users?.color_hex || '#f1f5f9' },
-                      ]}
-                    >
-                      <Text style={styles.dataCellText}>
-                        {board?.users?.initial || ''}
-                      </Text>
-                    </View>
-                  );
-                })}
               </View>
-            ))}
-          </View>
-        </ScrollView>
+
+              <Text style={styles.arrow}>↓ eşleşti</Text>
+
+              <TouchableOpacity
+                style={styles.selector}
+                onPress={() => setOpenDropdown(isOpen ? null : ojti.id)}
+              >
+                {currentRate ? (
+                  <View style={styles.selectedRow}>
+                    <View style={[styles.badge, styles.badgeSmall, { backgroundColor: currentRate.color_hex }]}>
+                      <Text style={styles.badgeTextSmall}>{currentRate.initial}</Text>
+                    </View>
+                    <Text style={styles.selectedName}>{currentRate.full_name}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.placeholderText}>Rate'li ATC seçin...</Text>
+                )}
+                <Text style={styles.chevron}>{isOpen ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+
+              {isOpen && (
+                <View style={styles.dropdown}>
+                  {rateUsers.map(rate => (
+                    <TouchableOpacity
+                      key={rate.id}
+                      style={styles.dropdownItem}
+                      onPress={() => updatePair(ojti.id, rate.id)}
+                    >
+                      <View style={[styles.badge, styles.badgeSmall, { backgroundColor: rate.color_hex }]}>
+                        <Text style={styles.badgeTextSmall}>{rate.initial}</Text>
+                      </View>
+                      <Text style={styles.dropdownText}>{rate.full_name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
     </View>
   );
 }
 
-const CELL_BORDER = '#0f1e35';
-
-const cellShadowBase = {
-  borderTopWidth: 1.5,
-  borderLeftWidth: 1.5,
-  borderTopColor: 'rgba(255,255,255,0.6)',
-  borderLeftColor: 'rgba(255,255,255,0.6)',
-  borderRightWidth: 1.5,
-  borderBottomWidth: 1.5,
-  borderRightColor: 'rgba(0,0,0,0.15)',
-  borderBottomColor: 'rgba(0,0,0,0.2)',
-  shadowColor: '#000',
-  shadowOffset: { width: 1, height: 2 },
-  shadowOpacity: 0.2,
-  shadowRadius: 2,
-  elevation: 4,
-};
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f7fb' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f7fb' },
-  emptyText: { color: '#94a3b8', fontSize: 14 },
   header: { backgroundColor: '#1a2744', padding: 20, paddingTop: 16 },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', letterSpacing: 2 },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff' },
   headerSub: { fontSize: 12, color: '#93c5fd', marginTop: 4 },
-  headerStatus: { fontSize: 12, color: '#4ade80', marginTop: 6, fontWeight: '600' },
-  tableScroll: { flex: 1 },
-  tableScrollContent: { padding: 20, paddingBottom: 120 },
-  tableWrap: {
+  content: { padding: 16 },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#1a2744', marginBottom: 4 },
+  sectionSub: { fontSize: 12, color: '#94a3b8', marginBottom: 16 },
+  pairCard: {
+    backgroundColor: '#ffffff',
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  row: { flexDirection: 'row' },
-  cornerCell: {
-    width: 56,
-    height: 48,
-    backgroundColor: '#1a2744',
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: CELL_BORDER,
-    borderTopLeftRadius: 10,
+    borderColor: '#e8eef6',
   },
-  timeCell: {
-    width: 56,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1a2744',
-    borderWidth: 1,
-    borderColor: CELL_BORDER,
-  },
-  timeCellText: { fontSize: 12, fontWeight: '800', color: '#ffffff' },
-  posHeaderCell: {
-    width: 76,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1a2744',
-    borderWidth: 1,
-    borderColor: CELL_BORDER,
-  },
-  posHeaderText: { fontSize: 11, fontWeight: '800', color: '#ffffff', letterSpacing: 0.5 },
-  dataCell: {
-    width: 76,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...cellShadowBase,
-  },
-  dataCellText: { fontSize: 15, fontWeight: '800', color: '#1a2744' },
-  ojtiCell: {
-    width: 76,
-    height: 48,
+  pairHeader: { flexDirection: 'row', alignItems: 'center' },
+  badge: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  badgeText: { fontSize: 13, fontWeight: '800', color: '#1a2744' },
+  badgeSmall: { width: 28, height: 28, borderRadius: 7, marginRight: 8 },
+  badgeTextSmall: { fontSize: 11, fontWeight: '800', color: '#1a2744' },
+  pairInfo: { flex: 1 },
+  pairName: { fontSize: 14, fontWeight: '700', color: '#1a2744' },
+  pairMeta: { fontSize: 11, color: '#9d174d', fontWeight: '600', marginTop: 1 },
+  arrow: { fontSize: 11, color: '#94a3b8', textAlign: 'center', marginVertical: 8 },
+  selector: {
     flexDirection: 'row',
-    ...cellShadowBase,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f4f7fb',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e2eaf4',
+  },
+  selectedRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  selectedName: { fontSize: 13, fontWeight: '600', color: '#1a2744' },
+  placeholderText: { fontSize: 13, color: '#94a3b8' },
+  chevron: { fontSize: 10, color: '#94a3b8' },
+  dropdown: {
+    marginTop: 6,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2eaf4',
     overflow: 'hidden',
   },
-  ojtiHalf: {
-    flex: 1,
+  dropdownItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
-  ojtiBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 0,
-    height: 0,
-    borderStyle: 'solid',
-    borderTopWidth: 14,
-    borderRightWidth: 14,
-    borderTopColor: '#7c3aed',
-    borderRightColor: '#7c3aed',
-    borderLeftWidth: 14,
-    borderLeftColor: 'transparent',
-    borderBottomWidth: 14,
-    borderBottomColor: 'transparent',
-  },
-  ojtiBadgeIcon: {
-    position: 'absolute',
-    top: -12,
-    right: -2,
-    fontSize: 9,
-  },
+  dropdownText: { fontSize: 13, fontWeight: '600', color: '#1a2744' },
 });
