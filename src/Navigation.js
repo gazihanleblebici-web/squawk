@@ -20,49 +20,16 @@ export default function Navigation({ user, onLogout }) {
           tabBarInactiveTintColor: '#94a3b8',
         }}
       >
-        <Tab.Screen
-          name="Program"
-          component={ScheduleScreen}
-          options={{ tabBarLabel: 'Program' }}
-        />
-        <Tab.Screen
-          name="Ekip"
-          component={CrewScreen}
-          options={{ tabBarLabel: 'Ekip' }}
-        />
-        <Tab.Screen
-          name="Istatistik"
-          component={StatsScreen}
-          options={{ tabBarLabel: 'Istatistik' }}
-        />
+        <Tab.Screen name="Program" component={ScheduleScreen} options={{ tabBarLabel: 'Program' }} />
+        <Tab.Screen name="Ekip" component={CrewScreen} options={{ tabBarLabel: 'Ekip' }} />
+        <Tab.Screen name="Istatistik" component={StatsScreen} options={{ tabBarLabel: 'Istatistik' }} />
         <Tab.Screen
           name="Ayarlar"
-          options={{
-            tabBarLabel: 'Ayarlar',
-            headerRight: () => (
-              <LogoutButton onLogout={onLogout} />
-            ),
-          }}
+          options={{ tabBarLabel: 'Ayarlar' }}
         >
           {() => <SettingsScreen user={user} onLogout={onLogout} />}
         </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
-  );
-}
-
-function LogoutButton({ onLogout }) {
-  const { TouchableOpacity, Text } = require('react-native');
-  return (
-    <TouchableOpacity
-      onPress={() => {
-        if (confirm('Cikis yapmak istediginizden emin misiniz?')) {
-          onLogout();
-        }
-      }}
-      style={{ marginRight: 16 }}
-    >
-      <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 13 }}>Cikis</Text>
-    </TouchableOpacity>
   );
 }
