@@ -6,6 +6,10 @@ import Navigation from './src/Navigation';
 export default function App() {
   const [user, setUser] = useState(null);
 
+  function handleLogout() {
+    setUser(null);
+  }
+
   if (!user) {
     return (
       <>
@@ -17,7 +21,7 @@ export default function App() {
 
   return (
     <>
-      <Navigation user={user} onLogout={() => setUser(null)} />
+      <Navigation user={user} onLogout={handleLogout} />
       <StatusBar style="auto" />
     </>
   );

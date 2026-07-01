@@ -11,7 +11,7 @@ const DISPLAY_TYPES = [
   { value: 'offset_timeline', label: 'Kaydirmali', desc: 'Farkli sure bloklar (sabahci yaz modu)', color: '#fde68a' },
 ];
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ user, onLogout }) {
   const [allAirports, setAllAirports] = useState([]);
   const [selectedAirport, setSelectedAirport] = useState(null);
   const [shiftTemplates, setShiftTemplates] = useState([]);
@@ -293,10 +293,7 @@ export default function SettingsScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity
-                style={styles.addShiftTab}
-                onPress={() => setCreateShiftModal(true)}
-              >
+              <TouchableOpacity style={styles.addShiftTab} onPress={() => setCreateShiftModal(true)}>
                 <Text style={styles.addShiftTabText}>+ Shift</Text>
               </TouchableOpacity>
             </View>
@@ -348,14 +345,39 @@ export default function SettingsScreen() {
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>Bu havalimani icin henuz shift tanimlanmamis</Text>
             <Text style={styles.emptySubText}>Asagidan gunduz ve gece shiftlerini olusturun</Text>
-            <TouchableOpacity
-              style={styles.createShiftBtn}
-              onPress={() => setCreateShiftModal(true)}
-            >
+            <TouchableOpacity style={styles.createShiftBtn} onPress={() => setCreateShiftModal(true)}>
               <Text style={styles.createShiftBtnText}>+ Shift Olustur</Text>
             </TouchableOpacity>
           </View>
         )}
+
+        {/* KULLANICI BİLGİSİ */}
+        {user && (
+          <View style={styles.userCard}>
+            <View style={[styles.userBadge, { backgroundColor: user.color_hex || '#94a3b8' }]}>
+              <Text style={styles.userBadgeText}>{user.initial}</Text>
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{user.full_name}</Text>
+              <Text style={styles.userRole}>
+                {user.role === 'chief' ? 'Ekip Sefi' : user.is_ojti ? 'Asistan ATC' : "Rate'li ATC"}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ÇIKIŞ BUTONU */}
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={() => {
+            if (confirm('Oturumu kapatmak istediginizden emin misiniz?')) {
+              onLogout();
+            }
+          }}
+        >
+          <Text style={styles.logoutBtnText}>🚪 Oturumu Kapat</Text>
+        </TouchableOpacity>
+
       </ScrollView>
 
       {/* HAVALİMANI SEÇİM MODAL */}
@@ -377,9 +399,7 @@ export default function SettingsScreen() {
                         <Text style={styles.airportOptionName}>{ap.name}</Text>
                         <Text style={styles.airportOptionUnit}>{ap.unit_name}</Text>
                       </View>
-                      {selectedAirport?.id === ap.id && (
-                        <Text style={styles.selectedCheck}>✓</Text>
-                      )}
+                      {selectedAirport?.id === ap.id && <Text style={styles.selectedCheck}>✓</Text>}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -397,7 +417,6 @@ export default function SettingsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Shift Olustur</Text>
-
             <Text style={styles.label}>Shift Turu</Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
@@ -413,7 +432,6 @@ export default function SettingsScreen() {
                 <Text style={[styles.templateTabText, newShiftType === 'night' && styles.templateTabTextActive]}>☾ Gece</Text>
               </TouchableOpacity>
             </View>
-
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Baslangic (Z)</Text>
@@ -424,7 +442,6 @@ export default function SettingsScreen() {
                 <TextInput style={styles.input} value={newShiftEnd} onChangeText={setNewShiftEnd} placeholder="16:00" />
               </View>
             </View>
-
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setCreateShiftModal(false)}>
                 <Text style={styles.cancelBtnText}>Vazgec</Text>
@@ -444,10 +461,8 @@ export default function SettingsScreen() {
             <Text style={styles.modalTitle}>
               {editingBlock ? 'Bloku Duzenle' : 'Yeni Blok Ekle'}
             </Text>
-
             <Text style={styles.label}>Blok Adi</Text>
-            <TextInput style={styles.input} value={formName} onChangeText={setFormName} placeholder="Ana Nobet, Gececi, Sabahci..." />
-
+            <TextInput style={styles.input} value={formName} onChangeText={setFormName} placeholder="Ana Nobet, Gececi..." />
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Baslangic (Z)</Text>
@@ -458,7 +473,6 @@ export default function SettingsScreen() {
                 <TextInput style={styles.input} value={formEnd} onChangeText={setFormEnd} placeholder="21:00" />
               </View>
             </View>
-
             <Text style={styles.label}>Gorunum Tipi</Text>
             {DISPLAY_TYPES.map(type => (
               <TouchableOpacity
@@ -474,7 +488,6 @@ export default function SettingsScreen() {
                 {formType === type.value && <Text style={{ color: '#1a2744', fontSize: 16 }}>✓</Text>}
               </TouchableOpacity>
             ))}
-
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setBlockModal(false)}>
                 <Text style={styles.cancelBtnText}>Vazgec</Text>
@@ -541,6 +554,14 @@ const styles = StyleSheet.create({
   emptySubText: { fontSize: 11, color: '#94a3b8', marginTop: 4, textAlign: 'center' },
   createShiftBtn: { backgroundColor: '#f59e0b', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, marginTop: 12 },
   createShiftBtnText: { color: '#1a2744', fontWeight: '800', fontSize: 13 },
+  userCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, padding: 14, marginTop: 16, borderWidth: 1, borderColor: '#e8eef6' },
+  userBadge: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  userBadgeText: { fontSize: 14, fontWeight: '800', color: '#1a2744' },
+  userInfo: { flex: 1 },
+  userName: { fontSize: 14, fontWeight: '700', color: '#1a2744' },
+  userRole: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
+  logoutBtn: { margin: 16, padding: 14, borderRadius: 10, borderWidth: 1.5, borderColor: '#fecaca', alignItems: 'center', marginTop: 12, backgroundColor: '#fff5f5' },
+  logoutBtnText: { color: '#dc2626', fontWeight: '700', fontSize: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#ffffff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32, maxHeight: '90%' },
   modalTitle: { fontSize: 18, fontWeight: '800', color: '#1a2744', marginBottom: 16 },
