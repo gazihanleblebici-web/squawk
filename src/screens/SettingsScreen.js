@@ -20,7 +20,11 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [airportModal, setAirportModal] = useState(false);
   const [blockModal, setBlockModal] = useState(false);
+  const [createShiftModal, setCreateShiftModal] = useState(false);
   const [editingBlock, setEditingBlock] = useState(null);
+  const [newShiftType, setNewShiftType] = useState('day');
+  const [newShiftStart, setNewShiftStart] = useState('06:00');
+  const [newShiftEnd, setNewShiftEnd] = useState('16:00');
 
   const [formName, setFormName] = useState('');
   const [formStart, setFormStart] = useState('');
@@ -40,13 +44,12 @@ export default function SettingsScreen() {
       .order('icao_code', { ascending: true });
     if (airports) setAllAirports(airports);
 
-    // Mevcut kullanıcının airport'unu bul
     const { data: userData } = await supabase
       .from('users')
       .select('airport_id, airports(*)')
       .not('airport_id', 'is', null)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     const currentAirport = userData?.airports || airports?.[0];
     if (currentAirport) {
@@ -89,6 +92,40 @@ export default function SettingsScreen() {
     await supabase.from('users').update({ airport_id: airport.id });
     await fetchTemplates(airport.id);
     setAirportModal(false);
+  }
+
+  async function createShiftTemplate() {
+    if (!newShiftStart || !newShiftEnd) {
+      alert('Lutfen baslangic ve bitis saatlerini girin.');
+      return;
+    }
+
+    const { data: template } = await supabase
+      .from('shift_templates')
+      .insert({
+        airport_id: selectedAirport.id,
+        shift_type: newShiftType,
+        start_zulu: newShiftStart + ':00',
+        end_zulu: newShiftEnd + ':00',
+        name: newShiftType === 'day' ? 'Gunduz' : 'Gece',
+      })
+      .select()
+      .single();
+
+    if (template) {
+      await supabase.from('shift_blocks').insert({
+        shift_template_id: template.id,
+        block_order: 1,
+        name: newShiftType === 'day' ? 'Ana Nobet' : '1. Blok',
+        start_zulu: newShiftStart + ':00',
+        end_zulu: newShiftEnd + ':00',
+        display_type: 'hourly_table',
+        always_open_positions: ['YWU', 'PLN'],
+      });
+
+      setCreateShiftModal(false);
+      await fetchTemplates(selectedAirport.id);
+    }
   }
 
   function openAddBlock() {
@@ -200,7 +237,6 @@ export default function SettingsScreen() {
     );
   }
 
-  // ICAO koduna göre havalimanlarını grupla
   const groupedAirports = allAirports.reduce((acc, ap) => {
     if (!acc[ap.icao_code]) acc[ap.icao_code] = [];
     acc[ap.icao_code].push(ap);
@@ -224,7 +260,6 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
 
-        {/* HAVALİMANI SEÇİMİ */}
         <Text style={styles.sectionTitle}>Aktif Havalimani</Text>
         <TouchableOpacity style={styles.airportCard} onPress={() => setAirportModal(true)}>
           <View style={styles.airportLeft}>
@@ -237,7 +272,6 @@ export default function SettingsScreen() {
           <Text style={styles.changeBtn}>Degistir ›</Text>
         </TouchableOpacity>
 
-        {/* SHIFT TEMPLATE SEÇİCİ */}
         {shiftTemplates.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Shift Yapilandirmasi</Text>
@@ -259,6 +293,12 @@ export default function SettingsScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity
+                style={styles.addShiftTab}
+                onPress={() => setCreateShiftModal(true)}
+              >
+                <Text style={styles.addShiftTabText}>+ Shift</Text>
+              </TouchableOpacity>
             </View>
 
             <Text style={styles.subTitle}>Zaman Cizelgesi</Text>
@@ -306,8 +346,14 @@ export default function SettingsScreen() {
 
         {shiftTemplates.length === 0 && selectedAirport && (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Bu havalimani icin henuz shift tanimlamamis</Text>
-            <Text style={styles.emptySubText}>Yapilandirma sihirbazi yakininda eklenecek</Text>
+            <Text style={styles.emptyText}>Bu havalimani icin henuz shift tanimlanmamis</Text>
+            <Text style={styles.emptySubText}>Asagidan gunduz ve gece shiftlerini olusturun</Text>
+            <TouchableOpacity
+              style={styles.createShiftBtn}
+              onPress={() => setCreateShiftModal(true)}
+            >
+              <Text style={styles.createShiftBtnText}>+ Shift Olustur</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -342,6 +388,51 @@ export default function SettingsScreen() {
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setAirportModal(false)}>
               <Text style={styles.cancelBtnText}>Kapat</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* SHIFT OLUŞTUR MODAL */}
+      <Modal visible={createShiftModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Shift Olustur</Text>
+
+            <Text style={styles.label}>Shift Turu</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.templateTab, newShiftType === 'day' && styles.templateTabActive, { flex: 1 }]}
+                onPress={() => { setNewShiftType('day'); setNewShiftStart('06:00'); setNewShiftEnd('16:00'); }}
+              >
+                <Text style={[styles.templateTabText, newShiftType === 'day' && styles.templateTabTextActive]}>☀ Gunduz</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.templateTab, newShiftType === 'night' && styles.templateTabActive, { flex: 1 }]}
+                onPress={() => { setNewShiftType('night'); setNewShiftStart('16:00'); setNewShiftEnd('06:00'); }}
+              >
+                <Text style={[styles.templateTabText, newShiftType === 'night' && styles.templateTabTextActive]}>☾ Gece</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Baslangic (Z)</Text>
+                <TextInput style={styles.input} value={newShiftStart} onChangeText={setNewShiftStart} placeholder="06:00" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Bitis (Z)</Text>
+                <TextInput style={styles.input} value={newShiftEnd} onChangeText={setNewShiftEnd} placeholder="16:00" />
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setCreateShiftModal(false)}>
+                <Text style={styles.cancelBtnText}>Vazgec</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={createShiftTemplate}>
+                <Text style={styles.saveBtnText}>Olustur</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -410,7 +501,7 @@ const styles = StyleSheet.create({
   subTitle: { fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   airportCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#e8eef6', justifyContent: 'space-between' },
   airportLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  airportIcao: { fontSize: 18, fontWeight: '800', color: '#1a2744', fontFamily: 'monospace' },
+  airportIcao: { fontSize: 18, fontWeight: '800', color: '#1a2744' },
   airportName: { fontSize: 13, fontWeight: '700', color: '#1a2744' },
   airportUnit: { fontSize: 11, color: '#94a3b8', marginTop: 1 },
   changeBtn: { fontSize: 13, fontWeight: '700', color: '#1a2744' },
@@ -421,6 +512,8 @@ const styles = StyleSheet.create({
   templateTabTextActive: { color: '#ffffff' },
   templateTabTime: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
   templateTabTimeActive: { color: '#93c5fd' },
+  addShiftTab: { backgroundColor: '#f0fdf4', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1.5, borderColor: '#86efac', justifyContent: 'center', minWidth: 60 },
+  addShiftTabText: { fontSize: 12, fontWeight: '800', color: '#16a34a' },
   timelineWrap: { marginBottom: 16 },
   timelineBar: { height: 44, backgroundColor: '#e2eaf4', borderRadius: 8, overflow: 'hidden', position: 'relative' },
   timelineBlock: { position: 'absolute', top: 3, bottom: 3, borderRadius: 5, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
@@ -446,6 +539,8 @@ const styles = StyleSheet.create({
   emptyCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#e8eef6' },
   emptyText: { fontSize: 13, fontWeight: '700', color: '#1a2744', textAlign: 'center' },
   emptySubText: { fontSize: 11, color: '#94a3b8', marginTop: 4, textAlign: 'center' },
+  createShiftBtn: { backgroundColor: '#f59e0b', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, marginTop: 12 },
+  createShiftBtnText: { color: '#1a2744', fontWeight: '800', fontSize: 13 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#ffffff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32, maxHeight: '90%' },
   modalTitle: { fontSize: 18, fontWeight: '800', color: '#1a2744', marginBottom: 16 },
