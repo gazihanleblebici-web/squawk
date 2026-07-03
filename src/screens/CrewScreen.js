@@ -21,7 +21,7 @@ const STATUS_OPTIONS = [
   { value: 'hourly_leave', label: 'Saatlik İzinli', color: '#db2777', bg: '#fdf2f8' },
 ];
 
-export default function CrewScreen() {
+export default function CrewScreen({ user }) {
   const [users, setUsers] = useState([]);
   const [pairs, setPairs] = useState([]);
   const [dayStatuses, setDayStatuses] = useState({});
@@ -37,6 +37,7 @@ export default function CrewScreen() {
   const [formIsOjti, setFormIsOjti] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
+const isChief = user?.role === 'chief';
 
   useEffect(() => {
     fetchAll();
@@ -235,9 +236,11 @@ export default function CrewScreen() {
             <Text style={styles.headerTitle}>Ekip Listesi</Text>
             <Text style={styles.headerSub}>{users.length} kişi · Bugün {activeCount} mevcut</Text>
           </View>
-          <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
-            <Text style={styles.addButtonText}>+ Ekle</Text>
-          </TouchableOpacity>
+          {isChief && (
+  <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
+    <Text style={styles.addButtonText}>+ Ekle</Text>
+  </TouchableOpacity>
+)}
         </View>
       </View>
 
@@ -380,17 +383,17 @@ export default function CrewScreen() {
               </TouchableOpacity>
             </View>
 
-            {editingUser && (
-              <TouchableOpacity
-                style={styles.deleteLink}
-                onPress={() => {
-                  setModalVisible(false);
-                  confirmDelete(editingUser);
-                }}
-              >
-                <Text style={styles.deleteLinkText}>Bu kişiyi ekipten çıkar</Text>
-              </TouchableOpacity>
-            )}
+            {editingUser && isChief && (
+  <TouchableOpacity
+    style={styles.deleteLink}
+    onPress={() => {
+      setModalVisible(false);
+      confirmDelete(editingUser);
+    }}
+  >
+    <Text style={styles.deleteLinkText}>Bu kişiyi ekipten çıkar</Text>
+  </TouchableOpacity>
+)}
           </View>
         </View>
       </Modal>

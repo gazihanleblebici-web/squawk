@@ -57,7 +57,7 @@ export default function ScheduleScreen({ user }) {
   const [offsetMorning, setOffsetMorning] = useState(true);
   const [aitUser, setAitUser] = useState(null);
 
-  const isChief = true; // geçici test
+  const isChief = user?.role === 'chief';
   const todayDate = new Date();
   const todayStr = todayDate.toISOString().split('T')[0];
 
@@ -120,7 +120,6 @@ export default function ScheduleScreen({ user }) {
 
     setScheduleInfo(schedule);
 
-    // AIT kişisini çek
     if (schedule.ait_user_id) {
       const { data: aitData } = await supabase
         .from('users')
@@ -492,7 +491,6 @@ export default function ScheduleScreen({ user }) {
 
           {shiftBlocks.map(block => renderBlock(block))}
 
-          {/* AIT GÖREVİ */}
           {aitUser && (
             <View style={styles.aitCard}>
               <Text style={styles.aitLabel}>📋 AIT Gorevi</Text>
@@ -528,7 +526,6 @@ export default function ScheduleScreen({ user }) {
         </ScrollView>
       )}
 
-      {/* PROGRAM OLUŞTUR MODAL */}
       <Modal visible={createModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>

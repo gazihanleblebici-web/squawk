@@ -20,13 +20,14 @@ export default function Navigation({ user, onLogout }) {
           tabBarInactiveTintColor: '#94a3b8',
         }}
       >
-        <Tab.Screen name="Program" component={ScheduleScreen} options={{ tabBarLabel: 'Program' }} />
-        <Tab.Screen name="Ekip" component={CrewScreen} options={{ tabBarLabel: 'Ekip' }} />
+        <Tab.Screen name="Ekip" options={{ tabBarLabel: 'Ekip' }}>
+          {() => <CrewScreen user={user} />}
+        </Tab.Screen>
+        <Tab.Screen name="Program" options={{ tabBarLabel: 'Program' }}>
+          {() => <ScheduleScreen user={user} />}
+        </Tab.Screen>
         <Tab.Screen name="Istatistik" component={StatsScreen} options={{ tabBarLabel: 'Istatistik' }} />
-        <Tab.Screen
-          name="Ayarlar"
-          options={{ tabBarLabel: 'Ayarlar' }}
-        >
+        <Tab.Screen name="Ayarlar" options={{ tabBarLabel: 'Ayarlar' }}>
           {() => <SettingsScreen user={user} onLogout={onLogout} />}
         </Tab.Screen>
       </Tab.Navigator>
