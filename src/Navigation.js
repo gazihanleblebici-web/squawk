@@ -4,6 +4,7 @@ import ScheduleScreen from './screens/ScheduleScreen';
 import CrewScreen from './screens/CrewScreen';
 import StatsScreen from './screens/StatsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import LeaveScreen from './screens/LeaveScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -23,10 +24,13 @@ export default function Navigation({ user, onLogout }) {
         <Tab.Screen name="Ekip" options={{ tabBarLabel: 'Ekip' }}>
           {() => <CrewScreen user={user} />}
         </Tab.Screen>
+        <Tab.Screen name="Ajanda" options={{ tabBarLabel: 'Ajanda' }}>
+          {() => <LeaveScreen user={user} />}
+        </Tab.Screen>
         <Tab.Screen name="Program" options={{ tabBarLabel: 'Program' }}>
           {() => <ScheduleScreen user={user} />}
         </Tab.Screen>
-        <Tab.Screen name="Istatistik" component={StatsScreen} options={{ tabBarLabel: 'Istatistik' }} />
+        <Tab.Screen name="Istatistik" component={StatsScreen} options={{ tabBarLabel: 'İstatistik' }} />
         <Tab.Screen name="Ayarlar" options={{ tabBarLabel: 'Ayarlar' }}>
           {() => <SettingsScreen user={user} onLogout={onLogout} />}
         </Tab.Screen>
