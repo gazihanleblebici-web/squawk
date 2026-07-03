@@ -28,39 +28,43 @@ function dateStr(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+async function sendNotification(userId, message) {
+  await supabase.from('notifications').insert({ user_id: userId, message });
+}
+
 export default function LeaveScreen({ user }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [leaves, setLeaves] = useState([]);
   const [allLeaves, setAllLeaves] = useState([]);
-  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
   const [dayModal, setDayModal] = useState(false);
   const [leaveTypeModal, setLeaveTypeModal] = useState(false);
   const [pendingModal, setPendingModal] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notifModal, setNotifModal] = useState(false);
 
   const isChief = user?.role === 'chief';
 
   useEffect(() => {
     fetchAll();
+    fetchNotifications();
   }, [viewYear, viewMonth]);
 
   async function fetchAll() {
     setLoading(true);
-    const monthStart = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`;
-    const monthEnd = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${getDaysInMonth(viewYear, viewMonth)}`;
-
     if (isChief) {
       const { data } = await supabase
         .from('leave_requests')
-        .select('*, users(*)')
-        .gte('start_date', monthStart)
-        .lte('start_date', monthEnd)
+        .select('*, users!leave_requests_user_id_fkey(*)')
+        .in('status', ['pending', 'cancel_pending', 'approved', 'cancelled', 'rejected'])
         .order('start_date', { ascending: true });
       if (data) setAllLeaves(data);
     } else {
+      const monthStart = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`;
+      const monthEnd = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${getDaysInMonth(viewYear, viewMonth)}`;
       const { data } = await supabase
         .from('leave_requests')
         .select('*')
@@ -73,13 +77,35 @@ export default function LeaveScreen({ user }) {
     setLoading(false);
   }
 
+  async function fetchNotifications() {
+    if (!user?.id) return;
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (data) setNotifications(data);
+  }
+
+  async function markAllRead() {
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+    fetchNotifications();
+  }
+
   function getLeavesForDate(dateString) {
     if (isChief) return allLeaves.filter(l => l.start_date <= dateString && l.end_date >= dateString);
     return leaves.filter(l => l.start_date <= dateString && l.end_date >= dateString);
   }
 
+  async function getChiefId() {
+    const { data } = await supabase.from('users').select('id').eq('role', 'chief').single();
+    return data?.id;
+  }
+
   async function submitLeaveRequest(leaveType) {
     if (!selectedDate || !user) return;
+    const info = LEAVE_TYPES.find(l => l.value === leaveType);
     const { error } = await supabase.from('leave_requests').insert({
       user_id: user.id,
       leave_type: leaveType,
@@ -88,66 +114,93 @@ export default function LeaveScreen({ user }) {
       status: 'pending',
     });
     if (error) { alert('Hata: ' + error.message); return; }
+    const chiefId = await getChiefId();
+    if (chiefId) {
+      const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+      await sendNotification(chiefId, `${user.full_name} — ${dateLabel} için ${info?.label} talebi gönderdi.`);
+    }
     setLeaveTypeModal(false);
     setDayModal(false);
     fetchAll();
   }
 
-  async function approveLeave(leaveId) {
+  async function approveLeave(leave) {
+    const info = LEAVE_TYPES.find(l => l.value === leave.leave_type);
     await supabase.from('leave_requests')
       .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: user?.id })
-      .eq('id', leaveId);
-    const leave = allLeaves.find(l => l.id === leaveId);
-    if (leave) {
-      const start = new Date(leave.start_date);
-      const end = new Date(leave.end_date);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const ds = d.toISOString().split('T')[0];
-        const { data: existing } = await supabase.from('user_day_status').select('id').eq('user_id', leave.user_id).eq('status_date', ds).maybeSingle();
-        if (existing) {
-          await supabase.from('user_day_status').update({ status: leave.leave_type }).eq('id', existing.id);
-        } else {
-          await supabase.from('user_day_status').insert({ user_id: leave.user_id, status_date: ds, status: leave.leave_type });
-        }
+      .eq('id', leave.id);
+    const start = new Date(leave.start_date);
+    const end = new Date(leave.end_date);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const ds = d.toISOString().split('T')[0];
+      const { data: existing } = await supabase.from('user_day_status').select('id').eq('user_id', leave.user_id).eq('status_date', ds).maybeSingle();
+      if (existing) {
+        await supabase.from('user_day_status').update({ status: leave.leave_type }).eq('id', existing.id);
+      } else {
+        await supabase.from('user_day_status').insert({ user_id: leave.user_id, status_date: ds, status: leave.leave_type });
       }
     }
+    const dateLabel = new Date(leave.start_date + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+    await sendNotification(leave.user_id, `✅ ${dateLabel} tarihli ${info?.label} talebiniz onaylandı.`);
     setPendingModal(false);
     fetchAll();
   }
 
-  async function rejectLeave(leaveId) {
+  async function rejectLeave(leave) {
+    const info = LEAVE_TYPES.find(l => l.value === leave.leave_type);
     await supabase.from('leave_requests')
       .update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: user?.id })
-      .eq('id', leaveId);
+      .eq('id', leave.id);
+    const dateLabel = new Date(leave.start_date + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+    await sendNotification(leave.user_id, `❌ ${dateLabel} tarihli ${info?.label} talebiniz reddedildi.`);
     setPendingModal(false);
     fetchAll();
   }
 
-  async function cancelLeave(leaveId) {
-    const leave = leaves.find(l => l.id === leaveId) || allLeaves.find(l => l.id === leaveId);
-    if (!leave) return;
+  async function chiefCancelLeave(leave) {
+    const info = LEAVE_TYPES.find(l => l.value === leave.leave_type);
+    await supabase.from('leave_requests').update({ status: 'cancelled' }).eq('id', leave.id);
+    const start = new Date(leave.start_date);
+    const end = new Date(leave.end_date);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const ds = d.toISOString().split('T')[0];
+      await supabase.from('user_day_status').update({ status: 'active' }).eq('user_id', leave.user_id).eq('status_date', ds);
+    }
+    const dateLabel = new Date(leave.start_date + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+    await sendNotification(leave.user_id, `🚫 ${dateLabel} tarihli ${info?.label} iznin ekip şefi tarafından iptal edildi.`);
+    setDayModal(false);
+    fetchAll();
+  }
+
+  async function cancelLeave(leave) {
+    const info = LEAVE_TYPES.find(l => l.value === leave.leave_type);
     if (leave.status === 'pending') {
-      await supabase.from('leave_requests').update({ status: 'cancelled' }).eq('id', leaveId);
+      await supabase.from('leave_requests').update({ status: 'cancelled' }).eq('id', leave.id);
     } else if (leave.status === 'approved') {
-      await supabase.from('leave_requests').update({ status: 'cancel_pending' }).eq('id', leaveId);
+      await supabase.from('leave_requests').update({ status: 'cancel_pending' }).eq('id', leave.id);
+      const chiefId = await getChiefId();
+      if (chiefId) {
+        const dateLabel = new Date(leave.start_date + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+        await sendNotification(chiefId, `🚫 ${user.full_name} — ${dateLabel} tarihli ${info?.label} için iptal talebi gönderdi.`);
+      }
     }
     setDayModal(false);
     fetchAll();
   }
 
-  async function approveCancelLeave(leaveId) {
+  async function approveCancelLeave(leave) {
+    const info = LEAVE_TYPES.find(l => l.value === leave.leave_type);
     await supabase.from('leave_requests')
       .update({ status: 'cancelled', reviewed_at: new Date().toISOString(), reviewed_by: user?.id })
-      .eq('id', leaveId);
-    const leave = allLeaves.find(l => l.id === leaveId);
-    if (leave) {
-      const start = new Date(leave.start_date);
-      const end = new Date(leave.end_date);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const ds = d.toISOString().split('T')[0];
-        await supabase.from('user_day_status').update({ status: 'active' }).eq('user_id', leave.user_id).eq('status_date', ds);
-      }
+      .eq('id', leave.id);
+    const start = new Date(leave.start_date);
+    const end = new Date(leave.end_date);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const ds = d.toISOString().split('T')[0];
+      await supabase.from('user_day_status').update({ status: 'active' }).eq('user_id', leave.user_id).eq('status_date', ds);
     }
+    const dateLabel = new Date(leave.start_date + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+    await sendNotification(leave.user_id, `✅ ${dateLabel} tarihli ${info?.label} iptal talebiniz onaylandı.`);
     setPendingModal(false);
     fetchAll();
   }
@@ -162,13 +215,10 @@ export default function LeaveScreen({ user }) {
     const isToday = ds === todayStr;
     const dayLeaves = getLeavesForDate(ds);
     const mainLeave = dayLeaves[0];
-
     let cellStyle = [styles.dayCell];
     let textStyle = [styles.dayText];
     let badge = null;
-
     if (isToday) textStyle.push(styles.dayTextToday);
-
     if (mainLeave) {
       const info = getLeaveTypeInfo(mainLeave.leave_type);
       if (mainLeave.status === 'pending') {
@@ -182,9 +232,7 @@ export default function LeaveScreen({ user }) {
         badge = <Text style={styles.badgeIcon}>🚫</Text>;
       }
     }
-
     const extraCount = isChief && dayLeaves.length > 1 ? dayLeaves.length : 0;
-
     return (
       <TouchableOpacity key={day} style={cellStyle} onPress={() => { setSelectedDate(ds); setDayModal(true); }}>
         <Text style={textStyle}>{day}</Text>
@@ -208,6 +256,7 @@ export default function LeaveScreen({ user }) {
   }
 
   const pendingLeaves = isChief ? allLeaves.filter(l => l.status === 'pending' || l.status === 'cancel_pending') : [];
+  const unreadCount = notifications.filter(n => !n.is_read).length;
   const selectedDayLeaves = selectedDate ? getLeavesForDate(selectedDate) : [];
 
   return (
@@ -215,11 +264,21 @@ export default function LeaveScreen({ user }) {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>Ajanda</Text>
-          {isChief && pendingLeaves.length > 0 && (
-            <TouchableOpacity style={styles.pendingBadge} onPress={() => setPendingModal(true)}>
-              <Text style={styles.pendingBadgeText}>⏳ {pendingLeaves.length} Bekliyor</Text>
+          <View style={styles.headerBtns}>
+            <TouchableOpacity style={styles.notifBtn} onPress={() => { setNotifModal(true); markAllRead(); }}>
+              <Text style={styles.notifBtnText}>🔔</Text>
+              {unreadCount > 0 && (
+                <View style={styles.notifDot}>
+                  <Text style={styles.notifDotText}>{unreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          )}
+            {isChief && pendingLeaves.length > 0 && (
+              <TouchableOpacity style={styles.pendingBadge} onPress={() => setPendingModal(true)}>
+                <Text style={styles.pendingBadgeText}>⏳ {pendingLeaves.length}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -233,13 +292,10 @@ export default function LeaveScreen({ user }) {
             <Text style={styles.monthBtnText}>›</Text>
           </TouchableOpacity>
         </View>
-
         <View style={styles.calendarRow}>
           {DAY_NAMES.map(d => <View key={d} style={styles.dayHeader}><Text style={styles.dayHeaderText}>{d}</Text></View>)}
         </View>
-
         {loading ? <ActivityIndicator color="#1a2744" style={{ marginTop: 40 }} /> : renderCalendar()}
-
         <View style={styles.legend}>
           {LEAVE_TYPES.map(lt => (
             <View key={lt.value} style={styles.legendItem}>
@@ -287,13 +343,23 @@ export default function LeaveScreen({ user }) {
                       </Text>
                     </View>
                     {!isChief && (leave.status === 'pending' || leave.status === 'approved') && (
-                      <TouchableOpacity style={styles.cancelLeaveBtn} onPress={() => cancelLeave(leave.id)}>
+                      <TouchableOpacity style={styles.cancelLeaveBtn} onPress={() => cancelLeave(leave)}>
                         <Text style={styles.cancelLeaveBtnText}>{leave.status === 'pending' ? 'Talebi Geri Al' : 'İptal Talebi Gönder'}</Text>
+                      </TouchableOpacity>
+                    )}
+                    {isChief && leave.status === 'approved' && (
+                      <TouchableOpacity style={[styles.cancelLeaveBtn, { borderColor: '#dc2626' }]} onPress={() => chiefCancelLeave(leave)}>
+                        <Text style={[styles.cancelLeaveBtnText, { color: '#dc2626' }]}>İzni İptal Et</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 );
               })
+            )}
+            {!isChief && selectedDayLeaves.length > 0 && selectedDayLeaves.every(l => ['cancelled', 'rejected'].includes(l.status)) && (
+              <TouchableOpacity style={styles.requestBtn} onPress={() => { setDayModal(false); setLeaveTypeModal(true); }}>
+                <Text style={styles.requestBtnText}>+ Yeni İzin Talebi Gönder</Text>
+              </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.closeBtn} onPress={() => setDayModal(false)}>
               <Text style={styles.closeBtnText}>Kapat</Text>
@@ -338,10 +404,10 @@ export default function LeaveScreen({ user }) {
                       <Text style={[styles.leaveTypeText, { color: info.color }]}>{leave.status === 'cancel_pending' ? '🚫 İptal Talebi — ' : ''}{info.label}</Text>
                     </View>
                     <View style={styles.pendingActions}>
-                      <TouchableOpacity style={styles.approveBtn} onPress={() => leave.status === 'cancel_pending' ? approveCancelLeave(leave.id) : approveLeave(leave.id)}>
+                      <TouchableOpacity style={styles.approveBtn} onPress={() => leave.status === 'cancel_pending' ? approveCancelLeave(leave) : approveLeave(leave)}>
                         <Text style={styles.approveBtnText}>✓ Onayla</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.rejectBtn} onPress={() => rejectLeave(leave.id)}>
+                      <TouchableOpacity style={styles.rejectBtn} onPress={() => rejectLeave(leave)}>
                         <Text style={styles.rejectBtnText}>✗ Reddet</Text>
                       </TouchableOpacity>
                     </View>
@@ -350,6 +416,31 @@ export default function LeaveScreen({ user }) {
               })}
             </ScrollView>
             <TouchableOpacity style={styles.closeBtn} onPress={() => setPendingModal(false)}>
+              <Text style={styles.closeBtnText}>Kapat</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={notifModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Bildirimler</Text>
+            {notifications.length === 0 ? (
+              <Text style={styles.noLeaveText}>Bildirim yok.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 400 }}>
+                {notifications.map(n => (
+                  <View key={n.id} style={[styles.notifCard, !n.is_read && styles.notifCardUnread]}>
+                    <Text style={styles.notifMessage}>{n.message}</Text>
+                    <Text style={styles.notifTime}>
+                      {new Date(n.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setNotifModal(false)}>
               <Text style={styles.closeBtnText}>Kapat</Text>
             </TouchableOpacity>
           </View>
@@ -364,6 +455,11 @@ const styles = StyleSheet.create({
   header: { backgroundColor: '#1a2744', padding: 20, paddingTop: 16, paddingBottom: 12 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', letterSpacing: 2 },
+  headerBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  notifBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10 },
+  notifBtnText: { fontSize: 18 },
+  notifDot: { position: 'absolute', top: -4, right: -4, backgroundColor: '#ef4444', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
+  notifDotText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   pendingBadge: { backgroundColor: '#f59e0b', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   pendingBadgeText: { color: '#1a2744', fontWeight: '800', fontSize: 12 },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
@@ -395,8 +491,8 @@ const styles = StyleSheet.create({
   leaveTypeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   leaveTypeText: { fontSize: 12, fontWeight: '700' },
   leaveStatus: { fontSize: 12, color: '#64748b', fontWeight: '600' },
-  cancelLeaveBtn: { marginTop: 10, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#dc2626', alignItems: 'center' },
-  cancelLeaveBtnText: { color: '#dc2626', fontWeight: '700', fontSize: 13 },
+  cancelLeaveBtn: { marginTop: 10, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#94a3b8', alignItems: 'center' },
+  cancelLeaveBtnText: { color: '#64748b', fontWeight: '700', fontSize: 13 },
   leaveTypeOption: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 10, borderWidth: 1.5, marginBottom: 8, gap: 10 },
   leaveTypeOptionText: { fontSize: 14, fontWeight: '700' },
   closeBtn: { marginTop: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: '#e2eaf4', alignItems: 'center' },
@@ -409,4 +505,8 @@ const styles = StyleSheet.create({
   approveBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 13 },
   rejectBtn: { flex: 1, backgroundColor: '#fef2f2', padding: 10, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#fecaca' },
   rejectBtnText: { color: '#dc2626', fontWeight: '700', fontSize: 13 },
+  notifCard: { padding: 12, borderRadius: 10, marginBottom: 8, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2eaf4' },
+  notifCardUnread: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+  notifMessage: { fontSize: 13, fontWeight: '600', color: '#1a2744', marginBottom: 4 },
+  notifTime: { fontSize: 11, color: '#94a3b8' },
 });
