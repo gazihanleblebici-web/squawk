@@ -12,44 +12,76 @@ function minutesToTime(m) {
   return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`;
 }
 
+function permutations(arr) {
+  if (arr.length <= 1) return [arr];
+  const result = [];
+  for (let i = 0; i < arr.length; i++) {
+    const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+    for (const p of permutations(rest)) {
+      result.push([arr[i], ...p]);
+    }
+  }
+  return result;
+}
+
 function buildRotation(people, positions, slots) {
-  const assignments = [];
-  const posCount = {};
-  const lastSlotIdx = {};
+  const P = positions.length;
+  const posCount = new Map();
+  const totalCount = new Map();
+  const lastWorked = new Map();
 
   people.forEach(p => {
-    posCount[p.id] = {};
-    positions.forEach(pos => posCount[p.id][pos] = 0);
-    lastSlotIdx[p.id] = -2;
+    posCount.set(p.id, Object.fromEntries(positions.map(pos => [pos, 0])));
+    totalCount.set(p.id, 0);
+    lastWorked.set(p.id, -2);
   });
+
+  const assignments = [];
+  const allPerms = permutations(positions.map((_, i) => i));
 
   for (let s = 0; s < slots.length; s++) {
     const slot = slots[s];
-    const assigned = new Set();
 
-    for (const pos of positions) {
-      const candidates = people.filter(p => {
-        if (assigned.has(p.id)) return false;
-        if (lastSlotIdx[p.id] === s - 1) return false;
-        return true;
-      });
-
-      if (candidates.length === 0) continue;
-
-      candidates.sort((a, b) => {
-        const diff = (posCount[a.id][pos] || 0) - (posCount[b.id][pos] || 0);
-        if (diff !== 0) return diff;
-        const totalA = Object.values(posCount[a.id]).reduce((x,y) => x+y, 0);
-        const totalB = Object.values(posCount[b.id]).reduce((x,y) => x+y, 0);
-        return totalA - totalB;
-      });
-
-      const person = candidates[0];
-      assignments.push({ slot, position: pos, person });
-      assigned.add(person.id);
-      posCount[person.id][pos] = (posCount[person.id][pos] || 0) + 1;
-      lastSlotIdx[person.id] = s;
+    let eligible = people.filter(p => lastWorked.get(p.id) !== s - 1);
+    if (eligible.length < P) {
+      eligible = [...people].sort((a, b) => lastWorked.get(a.id) - lastWorked.get(b.id));
     }
+
+    eligible = eligible
+      .map(p => ({ p, r: Math.random() }))
+      .sort((a, b) => {
+        const diff = totalCount.get(a.p.id) - totalCount.get(b.p.id);
+        if (diff !== 0) return diff;
+        return a.r - b.r;
+      })
+      .map(x => x.p);
+
+    const workers = eligible.slice(0, P);
+
+    let bestCost = Infinity;
+    let bestCostTies = [];
+    for (const perm of allPerms) {
+      let cost = 0;
+      for (let wi = 0; wi < workers.length; wi++) {
+        const pos = positions[perm[wi]];
+        cost += posCount.get(workers[wi].id)[pos];
+      }
+      if (cost < bestCost) {
+        bestCost = cost;
+        bestCostTies = [perm];
+      } else if (cost === bestCost) {
+        bestCostTies.push(perm);
+      }
+    }
+    const bestPerm = bestCostTies[Math.floor(Math.random() * bestCostTies.length)];
+
+    workers.forEach((person, wi) => {
+      const pos = positions[bestPerm[wi]];
+      assignments.push({ slot, position: pos, person });
+      posCount.get(person.id)[pos]++;
+      totalCount.set(person.id, totalCount.get(person.id) + 1);
+      lastWorked.set(person.id, s);
+    });
   }
 
   return assignments;
@@ -121,8 +153,13 @@ async function buildDaySchedule({
     slots.push(minutesToTime(startMin + i * 60));
   }
 
+  // Ekip şefi kuralı: rate'li ATC (şef ve OJTI haric) sayisi 10'dan azsa
+  // şef de board alir (toplamda 10'a tamamlamak icin). 10 veya fazlaysa şef almaz.
+  const ratedCount = activeUsers.filter(u => u.role !== 'chief' && !u.is_ojti).length;
+  const autoChiefTakesBoards = ratedCount < 10;
+
   const boardPeople = activeUsers.filter(u => {
-    if (u.role === 'chief' && !chiefTakesBoards) return false;
+    if (u.role === 'chief' && !autoChiefTakesBoards) return false;
     if (u.is_ojti) return false;
     return true;
   });
@@ -130,16 +167,14 @@ async function buildDaySchedule({
   const ojtiUsers = activeUsers.filter(u => u.is_ojti);
   const assignments = buildRotation(boardPeople, positions, slots);
 
-  // OJTI eşleştirmeleri
+  // OJTI eşleştirmeleri - OJTI her zaman rate'i ile birlikte, her board'da
   const ojtiAssignments = [];
   for (const ojti of ojtiUsers) {
     const pair = ojtiPairs.find(p => p.ojti_user_id === ojti.id);
     if (!pair) continue;
     const rateBoards = assignments.filter(a => a.person.id === pair.rate_user_id);
-    rateBoards.forEach((rb, idx) => {
-      if (idx % 2 === 0) {
-        ojtiAssignments.push({ ...rb, ojtiUserId: ojti.id });
-      }
+    rateBoards.forEach(rb => {
+      ojtiAssignments.push({ ...rb, ojtiUserId: ojti.id });
     });
   }
 
