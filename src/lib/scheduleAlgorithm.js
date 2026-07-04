@@ -24,47 +24,93 @@ function permutations(arr) {
   return result;
 }
 
-function buildRotation(people, positions, slots) {
+function buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlot) {
   const P = positions.length;
-  const posCount = new Map();
-  const totalCount = new Map();
-  const lastWorked = new Map();
+  const N = people.length;
+  const lastIdx = slots.length - 1;
 
+  let abstractQueue = Array.from({ length: N }, (_, i) => i);
+  let lastSlotIndices = new Set();
+  for (let s = 0; s <= lastIdx; s++) {
+    const workers = abstractQueue.slice(0, P);
+    if (s === lastIdx) lastSlotIndices = new Set(workers);
+    abstractQueue = [...abstractQueue.slice(P), ...workers];
+  }
+
+  const gececiList = people.filter(p => noLastSlot.has(p.id)).sort(() => Math.random() - 0.5);
+  const nonGececi = people.filter(p => !noLastSlot.has(p.id)).sort(() => Math.random() - 0.5);
+
+  const safeIndices = [];
+  const unsafeIndices = [];
+  for (let i = 0; i < N; i++) {
+    if (lastSlotIndices.has(i)) unsafeIndices.push(i); else safeIndices.push(i);
+  }
+
+  const initialOrder = new Array(N);
+  let gi = 0, ni = 0;
+  for (const idx of safeIndices) {
+    if (gi < gececiList.length) initialOrder[idx] = gececiList[gi++];
+  }
+  const remainingIndices = [...safeIndices.filter(idx => initialOrder[idx] === undefined), ...unsafeIndices];
+  for (const idx of remainingIndices) {
+    if (ni < nonGececi.length) initialOrder[idx] = nonGececi[ni++];
+  }
+  while (gi < gececiList.length) {
+    const emptyIdx = initialOrder.findIndex(x => x === undefined);
+    initialOrder[emptyIdx] = gececiList[gi++];
+  }
+
+  const posCount = new Map();
+  const lastWorked = new Map();
   people.forEach(p => {
     posCount.set(p.id, Object.fromEntries(positions.map(pos => [pos, 0])));
-    totalCount.set(p.id, 0);
     lastWorked.set(p.id, -2);
   });
 
-  const assignments = [];
   const allPerms = permutations(positions.map((_, i) => i));
+  const assignments = [];
+  let queue = [...initialOrder];
 
-  for (let s = 0; s < slots.length; s++) {
+  for (let s = 0; s <= lastIdx; s++) {
     const slot = slots[s];
+    let workers = queue.slice(0, P);
 
-    let eligible = people.filter(p => lastWorked.get(p.id) !== s - 1);
-    if (eligible.length < P) {
-      eligible = [...people].sort((a, b) => lastWorked.get(a.id) - lastWorked.get(b.id));
+    if (s === lastIdx) {
+      const hasGececi = workers.some(w => noLastSlot.has(w.id));
+      if (hasGececi) {
+        for (let wi = 0; wi < workers.length; wi++) {
+          if (noLastSlot.has(workers[wi].id)) {
+            const currentIds = new Set(workers.map(w => w.id));
+            let replacement = queue.find(p => !currentIds.has(p.id) && !noLastSlot.has(p.id) && lastWorked.get(p.id) !== s - 1);
+            if (!replacement) replacement = queue.find(p => !currentIds.has(p.id) && !noLastSlot.has(p.id));
+            if (replacement) workers[wi] = replacement;
+          }
+        }
+      }
+
+      if (preferNoLastSlot.size > 0) {
+        const hasAraci = workers.some(w => preferNoLastSlot.has(w.id));
+        if (hasAraci) {
+          for (let wi = 0; wi < workers.length; wi++) {
+            if (preferNoLastSlot.has(workers[wi].id)) {
+              const currentIds = new Set(workers.map(w => w.id));
+              const replacement = queue.find(p =>
+                !currentIds.has(p.id) && !noLastSlot.has(p.id) && !preferNoLastSlot.has(p.id) &&
+                lastWorked.get(p.id) !== s - 1
+              );
+              if (replacement) workers[wi] = replacement;
+            }
+          }
+        }
+      }
     }
-
-    eligible = eligible
-      .map(p => ({ p, r: Math.random() }))
-      .sort((a, b) => {
-        const diff = totalCount.get(a.p.id) - totalCount.get(b.p.id);
-        if (diff !== 0) return diff;
-        return a.r - b.r;
-      })
-      .map(x => x.p);
-
-    const workers = eligible.slice(0, P);
 
     let bestCost = Infinity;
     let bestCostTies = [];
     for (const perm of allPerms) {
       let cost = 0;
       for (let wi = 0; wi < workers.length; wi++) {
-        const pos = positions[perm[wi]];
-        cost += posCount.get(workers[wi].id)[pos];
+        cost += posCount.get(workers[wi].id)[positions[perm[wi]]];
       }
       if (cost < bestCost) {
         bestCost = cost;
@@ -79,62 +125,22 @@ function buildRotation(people, positions, slots) {
       const pos = positions[bestPerm[wi]];
       assignments.push({ slot, position: pos, person });
       posCount.get(person.id)[pos]++;
-      totalCount.set(person.id, totalCount.get(person.id) + 1);
       lastWorked.set(person.id, s);
     });
+
+    const workerIds = new Set(workers.map(w => w.id));
+    queue = [...queue.filter(p => !workerIds.has(p.id)), ...workers];
   }
 
   return assignments;
 }
 
+function buildRotation(people, positions, slots) {
+  return buildRotationCore(people, positions, slots, new Set(), new Set());
+}
+
 function buildRotationWithConstraints(people, positions, slots, noLastSlot, preferNoLastSlot) {
-  const assignments = [];
-  const posCount = {};
-  const lastSlotIdx = {};
-
-  people.forEach(p => {
-    posCount[p.id] = {};
-    positions.forEach(pos => posCount[p.id][pos] = 0);
-    lastSlotIdx[p.id] = -2;
-  });
-
-  for (let s = 0; s < slots.length; s++) {
-    const slot = slots[s];
-    const isLastSlot = s === slots.length - 1;
-    const assigned = new Set();
-
-    for (const pos of positions) {
-      let candidates = people.filter(p => {
-        if (assigned.has(p.id)) return false;
-        if (lastSlotIdx[p.id] === s - 1) return false;
-        if (isLastSlot && noLastSlot.has(p.id)) return false;
-        return true;
-      });
-
-      if (isLastSlot && candidates.length > 2) {
-        const preferred = candidates.filter(p => !preferNoLastSlot.has(p.id));
-        if (preferred.length > 0) candidates = preferred;
-      }
-
-      if (candidates.length === 0) continue;
-
-      candidates.sort((a, b) => {
-        const diff = (posCount[a.id][pos] || 0) - (posCount[b.id][pos] || 0);
-        if (diff !== 0) return diff;
-        const totalA = Object.values(posCount[a.id]).reduce((x,y) => x+y, 0);
-        const totalB = Object.values(posCount[b.id]).reduce((x,y) => x+y, 0);
-        return totalA - totalB;
-      });
-
-      const person = candidates[0];
-      assignments.push({ slot, position: pos, person });
-      assigned.add(person.id);
-      posCount[person.id][pos] = (posCount[person.id][pos] || 0) + 1;
-      lastSlotIdx[person.id] = s;
-    }
-  }
-
-  return assignments;
+  return buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlot);
 }
 
 async function buildDaySchedule({
@@ -323,17 +329,32 @@ const sabahciCount = n >= 9 ? 5 : n >= 7 ? 4 : Math.max(2, Math.floor(n * 0.4));
   const posMap = {};
   positionsData?.forEach(p => posMap[p.code] = p.id);
 
+  // OJTI eslestirmeleri - gece Ana Nobet icin de her zaman rate ile birlikte
+  const ojtiUsersNight = activeUsers.filter(u => u.is_ojti);
+  const ojtiAssignmentsNight = [];
+  for (const ojti of ojtiUsersNight) {
+    const pair = ojtiPairs.find(p => p.ojti_user_id === ojti.id);
+    if (!pair) continue;
+    const rateBoards = b1Assignments.filter(a => a.person.id === pair.rate_user_id);
+    rateBoards.forEach(rb => {
+      ojtiAssignmentsNight.push({ ...rb, ojtiUserId: ojti.id });
+    });
+  }
+
   const boardsToInsert = [
     ...b1Assignments
       .filter(a => posMap[a.position])
-      .map(a => ({
-        schedule_id: scheduleId,
-        position_id: posMap[a.position],
-        user_id: a.person.id,
-        ojti_user_id: null,
-        start_zulu: a.slot,
-        end_zulu: minutesToTime(timeToMinutes(a.slot) + 60),
-      })),
+      .map(a => {
+        const ojtiA = ojtiAssignmentsNight.find(oa => oa.slot === a.slot && oa.position === a.position);
+        return {
+          schedule_id: scheduleId,
+          position_id: posMap[a.position],
+          user_id: a.person.id,
+          ojti_user_id: ojtiA?.ojtiUserId || null,
+          start_zulu: a.slot,
+          end_zulu: minutesToTime(timeToMinutes(a.slot) + 60),
+        };
+      }),
     ...[...gececiBoards, ...araciBoards, ...sabahciBoards]
       .filter(b => posMap[b.posCode])
       .map(b => ({
