@@ -171,7 +171,7 @@ async function buildDaySchedule({
 
 async function buildNightSchedule({
   scheduleId, activeUsers, ojtiPairs,
-  positions, shiftBlocks, isOffsetMorning,
+  positions, shiftBlocks, isOffsetMorning, chiefTakesBoards,
 }) {
   const block1 = shiftBlocks.find(b => b.display_type === 'hourly_table');
   const block2 = shiftBlocks.find(b => b.name === 'Gececi');
@@ -180,13 +180,17 @@ async function buildNightSchedule({
 
   if (!block1) return { success: false, error: '1. blok bulunamadi' };
 
-  const boardPeople = activeUsers.filter(u => !u.is_ojti);
+  const boardPeople = activeUsers.filter(u => {
+    if (u.role === 'chief' && !chiefTakesBoards) return false;
+    if (u.is_ojti) return false;
+    return true;
+  });
   const n = boardPeople.length;
 
   // Shuffle
   const shuffled = [...boardPeople].sort(() => Math.random() - 0.5);
 
-  const sabahciCount = Math.max(2, Math.min(3, Math.floor(n * 0.25)));
+const sabahciCount = n >= 9 ? 5 : n >= 7 ? 4 : Math.max(2, Math.floor(n * 0.4));
   const sabahcilar = shuffled.slice(0, sabahciCount);
   const gececilar = shuffled.slice(sabahciCount, sabahciCount + 2);
   const aracilar = shuffled.slice(sabahciCount + 2, sabahciCount + 4);
@@ -239,31 +243,35 @@ async function buildNightSchedule({
     });
   }
 
-  // Sabahçı boardları
+  // Sabahçı boardları - 15dk offset, 45dk slot
   const sabahciBoards = [];
   if (block4) {
-    const b4Start = timeToMinutes(block4.start_zulu);
-    const b4End = 6 * 60;
-    const b4Total = b4End - b4Start;
-    const perPerson = Math.floor(b4Total / Math.max(sabahcilar.length, 1));
-    const b4Positions = positions.slice(0, Math.min(positions.length, sabahcilar.length + 1));
+    const SLOT = 45;
+    const OFFSET = 15;
+    const START_BASE = 2 * 60 + 30;  // 02:30
+    const END = 6 * 60;              // 06:00
+    const POS_ALL = ['YWU', 'PLN', 'YZA', 'YZC'].filter(p => positions.includes(p));
 
     if (isOffsetMorning) {
-      b4Positions.forEach((pos, posIdx) => {
-        sabahcilar.forEach((_, personIdx) => {
-          const person = sabahcilar[(personIdx + posIdx) % sabahcilar.length];
-          const startMin = b4Start + personIdx * perPerson;
-          const endMin = personIdx === sabahcilar.length - 1 ? b4End : startMin + perPerson;
+      POS_ALL.forEach((pos, posIdx) => {
+        let currentTime = START_BASE + posIdx * OFFSET;
+        let queueIdx = posIdx;
+
+        while (currentTime < END) {
+          const person = sabahcilar[queueIdx % sabahcilar.length];
+          const endTime = Math.min(currentTime + SLOT, END);
           sabahciBoards.push({
             posCode: pos,
-            start_zulu: minutesToTime(startMin),
-            end_zulu: minutesToTime(endMin),
+            start_zulu: minutesToTime(currentTime),
+            end_zulu: minutesToTime(endTime),
             user_id: person.id,
           });
-        });
+          currentTime += SLOT;
+          queueIdx++;
+        }
       });
     } else {
-      b4Positions.forEach((pos, idx) => {
+      POS_ALL.forEach((pos, idx) => {
         if (idx < sabahcilar.length) {
           sabahciBoards.push({
             posCode: pos,
@@ -275,7 +283,6 @@ async function buildNightSchedule({
       });
     }
   }
-
   // Pozisyon haritası
   const { data: positionsData } = await supabase.from('positions').select('id, code');
   const posMap = {};
@@ -409,7 +416,7 @@ export async function generateSchedule({
       scheduleId, scheduleDate, airportId,
       activeUsers, ojtiPairs: ojtiPairs || [],
       positions, shiftBlocks: shiftBlocks || [],
-      isOffsetMorning, aitUserId,
+      isOffsetMorning, chiefTakesBoards, aitUserId,
     });
   }
 }
