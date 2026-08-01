@@ -121,12 +121,45 @@ function buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlo
     }
     const bestPerm = bestCostTies[Math.floor(Math.random() * bestCostTies.length)];
 
-    workers.forEach((person, wi) => {
-      const pos = positions[bestPerm[wi]];
-      assignments.push({ slot, position: pos, person });
-      posCount.get(person.id)[pos]++;
-      lastWorked.set(person.id, s);
-    });
+   if (s === lastIdx && preferNoLastSlot.size > 0) {
+      const araciWorkers = workers.filter(w => preferNoLastSlot.has(w.id));
+      const preferredPos = ['YZC_PLN', 'YZC'].filter(p => positions.includes(p));
+      if (araciWorkers.length > 0 && araciWorkers.length <= preferredPos.length) {
+        const finalAssign = {};
+        araciWorkers.forEach((person) => {
+          const usablePos = preferredPos.find(p => !finalAssign[p] && (posCount.get(person.id)[p] || 0) === 0);
+          const fallbackPos = preferredPos.find(p => !finalAssign[p]);
+          const assignPos = usablePos || fallbackPos;
+          if (assignPos) finalAssign[assignPos] = person;
+        });
+        const nonAraciWorkers = workers.filter(w => !preferNoLastSlot.has(w.id));
+        const remainingPos = positions.filter(p => !finalAssign[p]);
+        nonAraciWorkers.forEach((person, wi) => {
+          if (wi < remainingPos.length) finalAssign[remainingPos[wi]] = person;
+        });
+        Object.entries(finalAssign).forEach(([pos, person]) => {
+          if (person) {
+            assignments.push({ slot, position: pos, person });
+            posCount.get(person.id)[pos]++;
+            lastWorked.set(person.id, s);
+          }
+        });
+      } else {
+        workers.forEach((person, wi) => {
+          const pos = positions[bestPerm[wi]];
+          assignments.push({ slot, position: pos, person });
+          posCount.get(person.id)[pos]++;
+          lastWorked.set(person.id, s);
+        });
+      }
+    } else {
+      workers.forEach((person, wi) => {
+        const pos = positions[bestPerm[wi]];
+        assignments.push({ slot, position: pos, person });
+        posCount.get(person.id)[pos]++;
+        lastWorked.set(person.id, s);
+      });
+    }
 
     const workerIds = new Set(workers.map(w => w.id));
     queue = [...queue.filter(p => !workerIds.has(p.id)), ...workers];
