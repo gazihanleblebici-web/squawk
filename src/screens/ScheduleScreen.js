@@ -325,9 +325,25 @@ export default function ScheduleScreen({ user }) {
     return (
       <View style={styles.simpleBlockRow}>
         {blockBoards.map(board => (
-          <View key={board.id} style={[styles.simpleBlockChip, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
-            <Text style={styles.simpleBlockPos}>{board.positions?.code}</Text>
-            <Text style={styles.simpleBlockInitial}>{board.users?.initial}</Text>
+          <View key={board.id} style={styles.simpleBlockChipWrap}>
+            {board.ojti ? (
+              <View style={[styles.simpleBlockChip, { flexDirection: 'row', padding: 0, overflow: 'hidden' }]}>
+                <View style={[styles.simpleBlockOjtiHalf, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
+                  <Text style={styles.simpleBlockPos}>{board.positions?.code}</Text>
+                  <Text style={styles.simpleBlockInitial}>{board.users?.initial}</Text>
+                </View>
+                <View style={[styles.simpleBlockOjtiHalf, { backgroundColor: board.ojti?.color_hex || '#e2e8f0' }]}>
+                  <Text style={styles.simpleBlockPos}>{board.positions?.code}</Text>
+                  <Text style={styles.simpleBlockInitial}>{board.ojti?.initial}</Text>
+                </View>
+                <View style={styles.ojtiBadge}><Text style={styles.ojtiBadgeIcon}>🤝</Text></View>
+              </View>
+            ) : (
+              <View style={[styles.simpleBlockChip, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
+                <Text style={styles.simpleBlockPos}>{board.positions?.code}</Text>
+                <Text style={styles.simpleBlockInitial}>{board.users?.initial}</Text>
+              </View>
+            )}
           </View>
         ))}
       </View>
@@ -678,6 +694,8 @@ const styles = StyleSheet.create({
   dataCell: { width: 76, height: 48, alignItems: 'center', justifyContent: 'center', ...cellShadowBase },
   dataCellText: { fontSize: 15, fontWeight: '800', color: '#1a2744' },
   ojtiCell: { width: 76, height: 48, flexDirection: 'row', ...cellShadowBase, overflow: 'hidden' },
+  simpleBlockChipWrap: { marginRight: 8 },
+  simpleBlockOjtiHalf: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 8 },
   ojtiHalf: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   ojtiBadge: { position: 'absolute', top: 0, right: 0, width: 0, height: 0, borderStyle: 'solid', borderTopWidth: 14, borderRightWidth: 14, borderTopColor: '#7c3aed', borderRightColor: '#7c3aed', borderLeftWidth: 14, borderLeftColor: 'transparent', borderBottomWidth: 14, borderBottomColor: 'transparent' },
   ojtiBadgeIcon: { position: 'absolute', top: -12, right: -2, fontSize: 9 },

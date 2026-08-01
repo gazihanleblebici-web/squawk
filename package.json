@@ -8,6 +8,7 @@
     "@react-navigation/native": "^7.3.4",
     "@supabase/supabase-js": "^2.109.0",
     "expo": "~56.0.12",
+    "expo-blur": "~56.0.4",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",

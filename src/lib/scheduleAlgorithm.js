@@ -357,14 +357,18 @@ const sabahciCount = n >= 9 ? 5 : n >= 7 ? 4 : Math.max(2, Math.floor(n * 0.4));
       }),
     ...[...gececiBoards, ...araciBoards, ...sabahciBoards]
       .filter(b => posMap[b.posCode])
-      .map(b => ({
-        schedule_id: scheduleId,
-        position_id: posMap[b.posCode],
-        user_id: b.user_id,
-        ojti_user_id: null,
-        start_zulu: b.start_zulu,
-        end_zulu: b.end_zulu,
-      })),
+      .map(b => {
+        const ojtiPair = ojtiPairs.find(p => p.rate_user_id === b.user_id);
+        const ojtiMatch = ojtiPair ? ojtiUsersNight.find(o => o.id === ojtiPair.ojti_user_id) : null;
+        return {
+          schedule_id: scheduleId,
+          position_id: posMap[b.posCode],
+          user_id: b.user_id,
+          ojti_user_id: ojtiMatch ? ojtiMatch.id : null,
+          start_zulu: b.start_zulu,
+          end_zulu: b.end_zulu,
+        };
+      }),
   ];
 
   if (boardsToInsert.length > 0) {
