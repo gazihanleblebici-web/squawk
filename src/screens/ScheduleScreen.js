@@ -406,8 +406,20 @@ export default function ScheduleScreen({ user }) {
                     const top = (bStart - startMin) * PX_PER_MIN;
                     const height = (bEnd - bStart) * PX_PER_MIN;
                     return (
-                      <View key={board.id} style={[styles.offsetBlock, { top, height: Math.max(height, 24), backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
-                        <Text style={styles.offsetBlockInitial}>{board.users?.initial}</Text>
+                      <View key={board.id} style={[styles.offsetBlock, { top, height: Math.max(height, 48), backgroundColor: board.users?.color_hex || '#f1f5f9', overflow: 'hidden', padding: 0, flexDirection: 'column' }]}>
+                        {board.ojti ? (
+                          <>
+                            <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: board.users?.color_hex || '#f1f5f9' }}>
+                              <Text style={styles.offsetBlockInitial}>{board.users?.initial}</Text>
+                            </View>
+                            <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: board.ojti?.color_hex || '#e2e8f0', borderTopWidth: 1.5, borderTopColor: 'rgba(255,255,255,0.7)' }}>
+                              <Text style={styles.offsetBlockInitial}>{board.ojti?.initial}</Text>
+                            </View>
+                            <View style={styles.ojtiBadge}><Text style={styles.ojtiBadgeIcon}>🤝</Text></View>
+                          </>
+                        ) : (
+                          <Text style={styles.offsetBlockInitial}>{board.users?.initial}</Text>
+                        )}
                       </View>
                     );
                   })}
@@ -696,6 +708,7 @@ const styles = StyleSheet.create({
   ojtiCell: { width: 76, height: 48, flexDirection: 'row', ...cellShadowBase, overflow: 'hidden' },
   simpleBlockChipWrap: { marginRight: 8 },
   simpleBlockOjtiHalf: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 8 },
+  offsetOjtiStripe: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.5)' },
   ojtiHalf: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   ojtiBadge: { position: 'absolute', top: 0, right: 0, width: 0, height: 0, borderStyle: 'solid', borderTopWidth: 14, borderRightWidth: 14, borderTopColor: '#7c3aed', borderRightColor: '#7c3aed', borderLeftWidth: 14, borderLeftColor: 'transparent', borderBottomWidth: 14, borderBottomColor: 'transparent' },
   ojtiBadgeIcon: { position: 'absolute', top: -12, right: -2, fontSize: 9 },
