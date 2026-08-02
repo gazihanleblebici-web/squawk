@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Modal, ActivityIndicator
@@ -45,13 +46,52 @@ export default function LeaveScreen({ user }) {
   const [pendingModal, setPendingModal] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notifModal, setNotifModal] = useState(false);
+  const [shiftStartDate, setShiftStartDate] = useState(null);
+  const [shiftStartType, setShiftStartType] = useState('day');
 
   const isChief = user?.role === 'chief';
 
   useEffect(() => {
     fetchAll();
     fetchNotifications();
+    fetchShiftInfo();
   }, [viewYear, viewMonth]);
+
+  useFocusEffect(useCallback(() => {
+    fetchShiftInfo();
+  }, []));
+
+  async function fetchShiftInfo() {
+    const chiefId = await getChiefId();
+    if (!chiefId) return;
+    const { data } = await supabase.from('users').select('shift_start_date, shift_start_type').eq('id', chiefId).single();
+    if (data) {
+      setShiftStartDate(data.shift_start_date);
+      setShiftStartType(data.shift_start_type || 'day');
+    }
+  }
+
+  function getShiftTypeForDate(dateStr) {
+    if (!shiftStartDate) return null;
+    const start = new Date(shiftStartDate + 'T00:00:00');
+    const target = new Date(dateStr + 'T00:00:00');
+    const diff = Math.round((target - start) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return null;
+    const cycle = diff % 5;
+    if (shiftStartType === 'day') {
+      // day -> night -> off -> off -> off
+      if (cycle === 0) return 'day';
+      if (cycle === 1) return 'night';
+      return 'off';
+    } else {
+      // night -> off -> off -> off -> day
+      if (cycle === 0) return 'night';
+      if (cycle === 1) return 'off';
+      if (cycle === 2) return 'off';
+      if (cycle === 3) return 'off';
+      return 'day';
+    }
+  }
 
   async function fetchAll() {
     setLoading(true);
@@ -233,9 +273,20 @@ export default function LeaveScreen({ user }) {
       }
     }
     const extraCount = isChief && dayLeaves.length > 1 ? dayLeaves.length : 0;
+    const shiftType = getShiftTypeForDate(ds);
+    if (shiftType && !mainLeave) {
+      if (shiftType === 'day') cellStyle.push({ backgroundColor: '#fef2f2', borderColor: '#fca5a5', borderWidth: 1 });
+      else if (shiftType === 'night') cellStyle.push({ backgroundColor: '#eff6ff', borderColor: '#93c5fd', borderWidth: 1 });
+      else if (shiftType === 'off') cellStyle.push({ backgroundColor: '#f0fdf4', borderColor: '#86efac', borderWidth: 1 });
+    }
     return (
       <TouchableOpacity key={day} style={cellStyle} onPress={() => { setSelectedDate(ds); setDayModal(true); }}>
         <Text style={textStyle}>{day}</Text>
+        {shiftType && !mainLeave && (
+          <Text style={{ fontSize: 7, color: shiftType === 'day' ? '#dc2626' : shiftType === 'night' ? '#2563eb' : '#16a34a', fontWeight: '600' }}>
+            {shiftType === 'day' ? 'DAY' : shiftType === 'night' ? 'NIGHT' : 'OFF'}
+          </Text>
+        )}
         {badge}
         {extraCount > 1 && <Text style={styles.extraDot}>+{extraCount}</Text>}
       </TouchableOpacity>
@@ -248,6 +299,8 @@ export default function LeaveScreen({ user }) {
     const cells = [];
     for (let i = 0; i < firstDay; i++) cells.push(<View key={`e-${i}`} style={styles.dayCell} />);
     for (let d = 1; d <= daysInMonth; d++) cells.push(renderDayCell(d));
+    // Son satiri 7 ile tamamla
+    while (cells.length % 7 !== 0) cells.push(<View key={`t-${cells.length}`} style={styles.dayCell} />);
     const rows = [];
     for (let i = 0; i < cells.length; i += 7) {
       rows.push(<View key={i} style={styles.calendarRow}>{cells.slice(i, i + 7)}</View>);
@@ -451,7 +504,7 @@ export default function LeaveScreen({ user }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f7fb' },
+  container: { flex: 1, backgroundColor: '#f4f7fb', paddingBottom: 80 },
   header: { backgroundColor: '#1a2744', padding: 20, paddingTop: 16, paddingBottom: 12 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', letterSpacing: 2 },

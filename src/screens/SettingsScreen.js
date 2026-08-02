@@ -15,6 +15,8 @@ export default function SettingsScreen({ user, onLogout }) {
   const [allAirports, setAllAirports] = useState([]);
   const [selectedAirport, setSelectedAirport] = useState(null);
   const [shiftTemplates, setShiftTemplates] = useState([]);
+  const [shiftStartDate, setShiftStartDate] = useState('');
+  const [shiftStartType, setShiftStartType] = useState('day');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +35,10 @@ export default function SettingsScreen({ user, onLogout }) {
 
   useEffect(() => {
     fetchData();
+    if (user?.role === 'chief') {
+      setShiftStartDate(user.shift_start_date || '');
+      setShiftStartType(user.shift_start_type || 'day');
+    }
   }, []);
 
   async function fetchData() {
@@ -366,6 +372,51 @@ export default function SettingsScreen({ user, onLogout }) {
           </View>
         )}
 
+        {user?.role === 'chief' && (
+          <View style={styles.shiftCalSection}>
+            <Text style={styles.sectionTitle}>Vardiya Takvimi</Text>
+            <Text style={styles.shiftCalDesc}>Ekibinizin vardiya döngüsünü tanımlayın. Ajanda ekranında görünecektir.</Text>
+            <View style={styles.shiftCalCard}>
+              <Text style={styles.shiftCalLabel}>Başlangıç tarihi</Text>
+              <input
+                type="date"
+                value={shiftStartDate}
+                onChange={async e => {
+                  setShiftStartDate(e.target.value);
+                  await supabase.from('users').update({ shift_start_date: e.target.value }).eq('id', user.id);
+                }}
+                style={{ width: '100%', fontSize: 14, padding: 8, borderRadius: 8, border: '0.5px solid #e2e8f0', marginTop: 4, marginBottom: 12 }}
+              />
+              <Text style={styles.shiftCalLabel}>İlk gün türü</Text>
+              <View style={styles.shiftTypeRow}>
+                <TouchableOpacity
+                  style={[styles.shiftTypeBtn, shiftStartType === 'day' && styles.shiftTypeBtnActive]}
+                  onPress={async () => {
+                    setShiftStartType('day');
+                    await supabase.from('users').update({ shift_start_type: 'day' }).eq('id', user.id);
+                  }}>
+                  <Text style={[styles.shiftTypeBtnText, shiftStartType === 'day' && styles.shiftTypeBtnTextActive]}>☀ Gündüz</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.shiftTypeBtn, shiftStartType === 'night' && styles.shiftTypeBtnActive]}
+                  onPress={async () => {
+                    setShiftStartType('night');
+                    await supabase.from('users').update({ shift_start_type: 'night' }).eq('id', user.id);
+                  }}>
+                  <Text style={[styles.shiftTypeBtnText, shiftStartType === 'night' && styles.shiftTypeBtnTextActive]}>☾ Gece</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.shiftCalPreview}>Döngü: Gündüz → Gece → Off → Off → Off → ...</Text>
+              <TouchableOpacity style={styles.shiftSaveBtn} onPress={async () => {
+                await supabase.from('users').update({ shift_start_date: shiftStartDate, shift_start_type: shiftStartType }).eq('id', user.id);
+                alert('Vardiya takvimi kaydedildi!');
+              }}>
+                <Text style={styles.shiftSaveBtnText}>Kaydet</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* ÇIKIŞ BUTONU */}
         <TouchableOpacity
           style={styles.logoutBtn}
@@ -509,7 +560,7 @@ const styles = StyleSheet.create({
   header: { backgroundColor: '#1a2744', padding: 20, paddingTop: 16 },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff' },
   headerSub: { fontSize: 12, color: '#93c5fd', marginTop: 4 },
-  content: { padding: 16 },
+  content: { padding: 16, paddingBottom: 100 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: '#1a2744', marginBottom: 10, marginTop: 8 },
   subTitle: { fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   airportCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#e8eef6', justifyContent: 'space-between' },
@@ -560,6 +611,18 @@ const styles = StyleSheet.create({
   userInfo: { flex: 1 },
   userName: { fontSize: 14, fontWeight: '700', color: '#1a2744' },
   userRole: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
+  shiftCalSection: { marginBottom: 16 },
+  shiftCalDesc: { fontSize: 12, color: '#64748b', marginBottom: 12, lineHeight: 18 },
+  shiftCalCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 16, borderWidth: 0.5, borderColor: '#e2eaf4' },
+  shiftCalLabel: { fontSize: 12, fontWeight: '600', color: '#1a2744', marginBottom: 4 },
+  shiftCalPreview: { fontSize: 11, color: '#94a3b8', marginTop: 12, fontStyle: 'italic' },
+  shiftTypeRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  shiftTypeBtn: { flex: 1, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#e2eaf4', alignItems: 'center', backgroundColor: '#f8fafc' },
+  shiftTypeBtnActive: { backgroundColor: '#1a2744', borderColor: '#1a2744' },
+  shiftTypeBtnText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  shiftTypeBtnTextActive: { color: '#ffffff' },
+  shiftSaveBtn: { backgroundColor: '#1a2744', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 12 },
+  shiftSaveBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 14 },
   logoutBtn: { margin: 16, padding: 14, borderRadius: 10, borderWidth: 1.5, borderColor: '#fecaca', alignItems: 'center', marginTop: 12, backgroundColor: '#fff5f5' },
   logoutBtnText: { color: '#dc2626', fontWeight: '700', fontSize: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

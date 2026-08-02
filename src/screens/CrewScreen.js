@@ -446,7 +446,7 @@ const isChief = user?.role === 'chief';
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f7fb' },
+  container: { flex: 1, backgroundColor: '#f4f7fb', paddingBottom: 80 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f7fb' },
   header: { backgroundColor: '#1a2744', padding: 20, paddingTop: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
