@@ -15,14 +15,15 @@ const LEAVE_TYPES = [
 ];
 
 const MONTH_NAMES = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-const DAY_NAMES = ['Pz','Pt','Sa','Ça','Pe','Cu','Ct'];
+const DAY_NAMES = ['Pt','Sa','Ça','Pe','Cu','Ct','Pz'];
 
 function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
 }
 
 function getFirstDayOfMonth(year, month) {
-  return new Date(year, month, 1).getDay();
+  const day = new Date(year, month, 1).getDay();
+  return (day + 6) % 7; // Pazartesi = 0
 }
 
 function dateStr(year, month, day) {
