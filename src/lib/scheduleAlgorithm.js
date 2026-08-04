@@ -203,6 +203,7 @@ async function buildDaySchedule({
     return true;
   });
 
+
   const ojtiUsers = activeUsers.filter(u => u.is_ojti);
   const assignments = buildRotation(boardPeople, positions, slots);
 
@@ -257,6 +258,7 @@ async function buildNightSchedule({
   const boardPeople = activeUsers.filter(u => {
     if (u.role === 'chief' && !chiefTakesBoards) return false;
     if (u.is_ojti) return false;
+    if (u.day_only) return false; // Sadece gunduz planlanacak kisiler gece dahil degil
     return true;
   });
   const n = boardPeople.length;

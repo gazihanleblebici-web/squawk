@@ -35,6 +35,7 @@ export default function CrewScreen({ user }) {
   const [formInitial, setFormInitial] = useState('');
   const [formSicil, setFormSicil] = useState('');
   const [formIsOjti, setFormIsOjti] = useState(false);
+  const [formDayOnly, setFormDayOnly] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 const isChief = user?.role === 'chief';
@@ -118,6 +119,7 @@ const isChief = user?.role === 'chief';
     setFormInitial('');
     setFormSicil('');
     setFormIsOjti(false);
+    setFormDayOnly(false);
     setModalVisible(true);
   }
 
@@ -127,6 +129,7 @@ const isChief = user?.role === 'chief';
     setFormInitial(user.initial);
     setFormSicil(user.sicil_no);
     setFormIsOjti(user.is_ojti);
+    setFormDayOnly(user.day_only || false);
     setModalVisible(true);
   }
 
@@ -140,7 +143,10 @@ const isChief = user?.role === 'chief';
       return;
     }
 
-    const randomColor = COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)];
+    const usedColors = new Set(users.map(u => u.color_hex));
+    const availableColors = COLOR_PALETTE.filter(c => !usedColors.has(c));
+    const colorPool = availableColors.length > 0 ? availableColors : COLOR_PALETTE;
+    const randomColor = colorPool[Math.floor(Math.random() * colorPool.length)];
 
     if (editingUser) {
       const { error } = await supabase
@@ -150,6 +156,7 @@ const isChief = user?.role === 'chief';
           initial: formInitial.toUpperCase(),
           sicil_no: formSicil,
           is_ojti: formIsOjti,
+          day_only: formDayOnly,
         })
         .eq('id', editingUser.id);
       if (error) {
@@ -164,10 +171,12 @@ const isChief = user?.role === 'chief';
           initial: formInitial.toUpperCase(),
           sicil_no: formSicil,
           is_ojti: formIsOjti,
+          day_only: formDayOnly,
           role: 'atc',
           password: '1234',
           color_hex: randomColor,
           is_active: true,
+          airport_id: user?.airport_id || null,
         });
       if (error) {
         alert('Hata: ' + error.message);
@@ -237,10 +246,10 @@ const isChief = user?.role === 'chief';
             <Text style={styles.headerSub}>{users.length} kişi · Bugün {activeCount} mevcut</Text>
           </View>
           {isChief && (
-  <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
-    <Text style={styles.addButtonText}>+ Ekle</Text>
-  </TouchableOpacity>
-)}
+            <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
+              <Text style={styles.addButtonText}>+ Ekle</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -362,17 +371,33 @@ const isChief = user?.role === 'chief';
             <View style={styles.typeRow}>
               <TouchableOpacity
                 style={[styles.typeButton, !formIsOjti && styles.typeButtonActive]}
-                onPress={() => setFormIsOjti(false)}
+                onPress={() => { setFormIsOjti(false); }}
               >
                 <Text style={[styles.typeButtonText, !formIsOjti && styles.typeButtonTextActive]}>Rate'li ATC</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.typeButton, formIsOjti && styles.typeButtonActive]}
-                onPress={() => setFormIsOjti(true)}
+                onPress={() => { setFormIsOjti(true); setFormDayOnly(false); }}
               >
                 <Text style={[styles.typeButtonText, formIsOjti && styles.typeButtonTextActive]}>Asistan ATC</Text>
               </TouchableOpacity>
             </View>
+            {!formIsOjti && (
+              <View style={[styles.typeRow, { marginTop: 8 }]}>
+                <TouchableOpacity
+                  style={[styles.typeButton, !formDayOnly && styles.typeButtonActive]}
+                  onPress={() => setFormDayOnly(false)}
+                >
+                  <Text style={[styles.typeButtonText, !formDayOnly && styles.typeButtonTextActive]}>Ekip</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.typeButton, formDayOnly && styles.typeButtonActive]}
+                  onPress={() => setFormDayOnly(true)}
+                >
+                  <Text style={[styles.typeButtonText, formDayOnly && styles.typeButtonTextActive]}>Sadece Gündüz</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
@@ -448,11 +473,11 @@ const isChief = user?.role === 'chief';
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f7fb', paddingBottom: 80 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f7fb' },
-  header: { backgroundColor: '#1a2744', padding: 20, paddingTop: 16 },
+  header: { backgroundColor: '#1a2744', padding: 20, paddingTop: 16, zIndex: 10 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff' },
   headerSub: { fontSize: 12, color: '#93c5fd', marginTop: 4 },
-  addButton: { backgroundColor: '#f59e0b', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  addButton: { backgroundColor: '#ffffff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   addButtonText: { color: '#1a2744', fontWeight: '800', fontSize: 13 },
   scrollContent: { padding: 12 },
   todayLabel: { fontSize: 12, fontWeight: '700', color: '#1a2744', marginBottom: 10, backgroundColor: '#fef3c7', padding: 8, borderRadius: 6 },

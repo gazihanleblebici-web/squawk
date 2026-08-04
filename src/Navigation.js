@@ -69,6 +69,7 @@ export default function Navigation({ user, onLogout }) {
           options={{
             tabBarLabel: 'Ekip',
             tabBarIcon: ({ color, size }) => <TabIcon name="users" color={color} size={size} />,
+            headerShown: false,
           }}
         >
           {() => <CrewScreen user={user} />}
