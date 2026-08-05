@@ -264,7 +264,23 @@ async function buildNightSchedule({
   const n = boardPeople.length;
 
   // Shuffle
-  const shuffled = [...boardPeople].sort(() => Math.random() - 0.5);
+  // Gece off istatistiklerini cek
+  const { data: nightOffBoards } = await supabase
+    .from('boards')
+    .select('user_id')
+    .in('user_id', boardPeople.map(p => p.id))
+    .eq('is_night_off', true);
+
+  const nightOffCounts = {};
+  boardPeople.forEach(p => { nightOffCounts[p.id] = 0; });
+  nightOffBoards?.forEach(b => { if (nightOffCounts[b.user_id] !== undefined) nightOffCounts[b.user_id]++; });
+
+  // En az gece off alan one (gece off'a gider), en cok alan sona (gececi/araci/sabahciya gider)
+  const shuffled = [...boardPeople].sort((a, b) => {
+    const diff = (nightOffCounts[a.id] || 0) - (nightOffCounts[b.id] || 0);
+    if (diff !== 0) return diff;
+    return Math.random() - 0.5;
+  });
 
   // Sabahci pozisyon sayisina gore sabahci kisi sayisi: 3 pozisyon=4 kisi, 4 pozisyon=5 kisi
   const morningPosCount = (selectedMorningPositions && selectedMorningPositions.length > 0)
