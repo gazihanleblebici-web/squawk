@@ -359,7 +359,7 @@ export default function ScheduleScreen({ user }) {
         {blockBoards.map(board => (
           <TouchableOpacity key={board.id} style={styles.simpleBlockChipWrap} onPress={isChief ? () => { setEditingBoard(board); setEditBoardModal(true); } : null} disabled={!isChief}>
             {board.ojti ? (
-              <View style={{ width: 110, minHeight: 70, borderRadius: 10, flexDirection: 'row', overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 }}>
+              <View style={{ width: 110, minHeight: 85, borderRadius: 10, flexDirection: 'row', overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 }}>
                 <View style={{ flex: 1, backgroundColor: board.users?.color_hex || '#f1f5f9', justifyContent: 'space-between', alignItems: 'stretch', padding: 6, borderLeftWidth: 3, borderLeftColor: board.users?.color_hex || '#ccc' }}>
                   <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600' }}>{board.start_zulu?.slice(0,5)}Z</Text>
                   <Text style={{ fontSize: 14, fontWeight: '800', color: '#1a2744', textAlign: 'center' }}>{board.users?.initial || board.temp_initial || ''}</Text>
