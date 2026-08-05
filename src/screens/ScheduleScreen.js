@@ -373,10 +373,15 @@ export default function ScheduleScreen({ user }) {
                 <View style={styles.ojtiBadge}><Text style={styles.ojtiBadgeIcon}>🤝</Text></View>
               </View>
             ) : (
-              <View style={[styles.simpleBlockChip, { backgroundColor: board.users?.color_hex || '#f1f5f9', borderLeftWidth: 3, borderLeftColor: 'rgba(0,0,0,0.2)', justifyContent: 'space-between', alignItems: 'stretch', padding: 6 }]}>
-                <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600' }}>{board.start_zulu?.slice(0,5)}Z</Text>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#1a2744', textAlign: 'center' }}>{board.users?.initial || board.temp_initial || ''}</Text>
-                <Text style={{ fontSize: 9, color: '#1a2744', textAlign: 'right', fontWeight: '600' }}>{board.end_zulu?.slice(0,5)}Z</Text>
+              <View style={[styles.simpleBlockChip, { overflow: 'hidden', justifyContent: 'flex-start', alignItems: 'stretch', padding: 0 }]}>
+                <View style={{ backgroundColor: '#1a2744', padding: 4, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>{board.positions?.code}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: board.users?.color_hex || '#f1f5f9', justifyContent: 'space-between', alignItems: 'stretch', padding: 6 }}>
+                  <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600' }}>{board.start_zulu?.slice(0,5)}Z</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#1a2744', textAlign: 'center' }}>{board.users?.initial || board.temp_initial || ''}</Text>
+                  <Text style={{ fontSize: 9, color: '#1a2744', textAlign: 'right', fontWeight: '600' }}>{board.end_zulu?.slice(0,5)}Z</Text>
+                </View>
               </View>
             )}
           </TouchableOpacity>
@@ -888,7 +893,7 @@ const styles = StyleSheet.create({
   emptyBlock: { marginHorizontal: 16, marginBottom: 8, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2eaf4', borderStyle: 'dashed' },
   emptyBlockText: { fontSize: 11, color: '#94a3b8', textAlign: 'center' },
   simpleBlockRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
-  simpleBlockChip: { width: 110, minHeight: 70, alignItems: 'stretch', borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 },
+  simpleBlockChip: { width: 110, minHeight: 85, borderRadius: 10, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 },
   simpleBlockPos: { fontSize: 9, fontWeight: '700', color: '#1a2744', opacity: 0.7 },
   simpleBlockInitial: { fontSize: 16, fontWeight: '800', color: '#1a2744', marginTop: 2 },
   offsetTimelineWrap: { flexDirection: 'row', paddingHorizontal: 16 },
