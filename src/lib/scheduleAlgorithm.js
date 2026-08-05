@@ -233,7 +233,7 @@ async function buildDaySchedule({
         user_id: a.person.id,
         ojti_user_id: ojtiA?.ojtiUserId || null,
         start_zulu: a.slot,
-        end_zulu: minutesToTime(timeToMinutes(a.slot) + 60),
+        end_zulu: minutesToTime(timeToMinutes(a.slot) + slotDuration),
       };
     });
 
@@ -246,7 +246,7 @@ async function buildDaySchedule({
 
 async function buildNightSchedule({
   scheduleId, activeUsers, ojtiPairs,
-  positions, shiftBlocks, isOffsetMorning, chiefTakesBoards,
+  positions, shiftBlocks, isOffsetMorning, chiefTakesBoards, selectedMorningPositions = [],
 }) {
   const block1 = shiftBlocks.find(b => b.display_type === 'hourly_table');
   const block2 = shiftBlocks.find(b => b.name === 'Gececi');
@@ -329,7 +329,9 @@ const sabahciCount = n >= 9 ? 5 : n >= 7 ? 4 : Math.max(2, Math.floor(n * 0.4));
     const START_BASE = 2 * 60 + 30;
     const END = 6 * 60;
     const YZC_OPEN = 3 * 60;
-    const POS_ALL = ['YWU', 'PLN', 'YZA', 'YZC'].filter(p => positions.includes(p));
+    const POS_ALL = ['YWU', 'PLN', 'YZA', 'YZC'].filter(p => 
+      (selectedMorningPositions.length > 0 ? selectedMorningPositions.includes(p) : true) && positions.includes(p)
+    );
 
     if (isOffsetMorning && sabahcilar.length >= 5) {
       const workTime = {};
@@ -484,7 +486,7 @@ if (elapsed >= 90 && waiting.length === 0) {
           user_id: a.person.id,
           ojti_user_id: ojtiA?.ojtiUserId || null,
           start_zulu: a.slot,
-          end_zulu: minutesToTime(timeToMinutes(a.slot) + slotDuration),
+          end_zulu: minutesToTime(timeToMinutes(a.slot) + 60),
         };
       }),
     ...[...gececiBoards, ...araciBoards, ...sabahciBoards]
@@ -518,6 +520,8 @@ export async function generateSchedule({
   scheduleId, scheduleDate, shiftType, airportId,
   chiefTakesBoards = false, chiefBoardCount = 0,
   isOffsetMorning = false,
+  selectedPositions = [],
+  selectedMorningPositions = [],
 }) {
   // Kullanıcıları çek
   const { data: allUsers } = await supabase
@@ -577,7 +581,10 @@ export async function generateSchedule({
     .select('*')
     .order('id', { ascending: true });
 
-  const positions = (positionsData || []).map(p => p.code);
+  const allPositions = (positionsData || []).map(p => p.code);
+  const positions = selectedPositions && selectedPositions.length > 0
+    ? allPositions.filter(p => selectedPositions.includes(p))
+    : allPositions;
 
   // Shift template ve bloklar
   const { data: shiftTemplate } = await supabase
@@ -608,7 +615,7 @@ export async function generateSchedule({
       scheduleId, scheduleDate, airportId,
       activeUsers, ojtiPairs: ojtiPairs || [],
       positions, shiftBlocks: shiftBlocks || [],
-      isOffsetMorning, chiefTakesBoards, aitUserId,
+      isOffsetMorning, chiefTakesBoards, aitUserId, selectedMorningPositions,
     });
   }
 }

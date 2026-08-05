@@ -55,6 +55,8 @@ export default function ScheduleScreen({ user }) {
   const [chiefTakesBoards, setChiefTakesBoards] = useState(false);
   const [chiefBoardCount, setChiefBoardCount] = useState('2');
   const [offsetMorning, setOffsetMorning] = useState(true);
+  const [selectedPositions, setSelectedPositions] = useState(['YWU', 'PLN', 'YZA', 'YZC', 'YZC_PLN']);
+  const [selectedMorningPositions, setSelectedMorningPositions] = useState(['YWU', 'PLN', 'YZA', 'YZC']);
   const [aitUser, setAitUser] = useState(null);
 
   const isChief = user?.role === 'chief';
@@ -206,7 +208,9 @@ export default function ScheduleScreen({ user }) {
           airportId: airport?.id,
           chiefTakesBoards,
           chiefBoardCount: parseInt(chiefBoardCount) || 0,
-          isOffsetMorning: newShiftType === 'night' ? offsetMorning : false,
+          isOffsetMorning: newShiftType === 'night' ? true : false,
+          selectedMorningPositions: newShiftType === 'night' ? selectedMorningPositions : [],
+          selectedPositions,
         });
       } catch (e) {
         alert('Algoritma hatasi: ' + e.message);
@@ -628,23 +632,82 @@ export default function ScheduleScreen({ user }) {
 
               {newShiftType === 'night' && (
                 <>
-                  <Text style={styles.label}>Sabahci bolumu kaydirmali mi?</Text>
-                  <View style={styles.shiftTypeRow}>
-                    <TouchableOpacity
-                      style={[styles.shiftTypeBtn, offsetMorning && styles.shiftTypeBtnActive]}
-                      onPress={() => setOffsetMorning(true)}
-                    >
-                      <Text style={[styles.shiftTypeBtnText, offsetMorning && styles.shiftTypeBtnTextActive]}>🌊 Kaydirmali</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.shiftTypeBtn, !offsetMorning && styles.shiftTypeBtnActive]}
-                      onPress={() => setOffsetMorning(false)}
-                    >
-                      <Text style={[styles.shiftTypeBtnText, !offsetMorning && styles.shiftTypeBtnTextActive]}>❄ Sabit</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <Text style={styles.label}>Ana nöbet pozisyonları</Text>
+                  {['YWU', 'PLN', 'YZA', 'YZC', 'YZC_PLN'].map(pos => {
+                    const isOn = selectedPositions.includes(pos);
+                    return (
+                      <TouchableOpacity
+                        key={pos}
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#e2eaf4' }}
+                        onPress={() => {
+                          if (isOn) setSelectedPositions(selectedPositions.filter(p => p !== pos));
+                          else setSelectedPositions([...selectedPositions, pos]);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isOn ? '#1a2744' : '#cbd5e1' }} />
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: isOn ? '#1a2744' : '#94a3b8' }}>{pos}</Text>
+                        </View>
+                        <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: isOn ? '#1a2744' : '#e2e8f0', padding: 2, alignItems: isOn ? 'flex-end' : 'flex-start' }}>
+                          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#ffffff' }} />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  <Text style={[styles.label, { marginTop: 16 }]}>Sabahçı pozisyonları</Text>
+                  {['YWU', 'PLN', 'YZA', 'YZC'].map(pos => {
+                    const key = 'sabahci_' + pos;
+                    const isOn = selectedMorningPositions.includes(pos);
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#e2eaf4' }}
+                        onPress={() => {
+                          if (isOn) setSelectedMorningPositions(selectedMorningPositions.filter(p => p !== pos));
+                          else setSelectedMorningPositions([...selectedMorningPositions, pos]);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isOn ? '#1a2744' : '#cbd5e1' }} />
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: isOn ? '#1a2744' : '#94a3b8' }}>{pos}</Text>
+                        </View>
+                        <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: isOn ? '#1a2744' : '#e2e8f0', padding: 2, alignItems: isOn ? 'flex-end' : 'flex-start' }}>
+                          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#ffffff' }} />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </>
               )}
+
+              {newShiftType === 'day' && <View style={{ marginBottom: 16 }}>
+                <Text style={[styles.label, { marginBottom: 10 }]}>Pozisyonlar — aç / kapa</Text>
+                {['YWU', 'PLN', 'YZA', 'YZC', 'YZC_PLN'].map(pos => {
+                  const isOn = selectedPositions.includes(pos);
+                  return (
+                    <TouchableOpacity
+                      key={pos}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#e2eaf4' }}
+                      onPress={() => {
+                        if (isOn) {
+                          setSelectedPositions(selectedPositions.filter(p => p !== pos));
+                        } else {
+                          setSelectedPositions([...selectedPositions, pos]);
+                        }
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isOn ? '#1a2744' : '#cbd5e1' }} />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: isOn ? '#1a2744' : '#94a3b8' }}>{pos}</Text>
+                      </View>
+                      <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: isOn ? '#1a2744' : '#e2e8f0', padding: 2, alignItems: isOn ? 'flex-end' : 'flex-start' }}>
+                        <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#ffffff' }} />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>}
 
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setCreateModal(false)}>
