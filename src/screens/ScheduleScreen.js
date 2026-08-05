@@ -56,6 +56,8 @@ export default function ScheduleScreen({ user }) {
   const [editingBoard, setEditingBoard] = useState(null);
   const [editBoardUsers, setEditBoardUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [tempInitial, setTempInitial] = useState('');
+  const [ojtiPairs, setOjtiPairs] = useState([]);
   const [chiefTakesBoards, setChiefTakesBoards] = useState(false);
   const [chiefBoardCount, setChiefBoardCount] = useState('2');
   const [offsetMorning, setOffsetMorning] = useState(true);
@@ -72,10 +74,11 @@ export default function ScheduleScreen({ user }) {
   }, [shiftType]);
 
   async function loadSchedule() {
+    if (!scheduleInfo?.id) return;
     const { data: bds } = await supabase
       .from('boards')
       .select('*, positions(*), users!boards_user_id_fkey(*), ojti:users!boards_ojti_user_id_fkey(*)')
-      .eq('schedule_id', scheduleId);
+      .eq('schedule_id', scheduleInfo.id);
     if (bds) setBoards(bds);
   }
 
@@ -84,6 +87,8 @@ export default function ScheduleScreen({ user }) {
 
     const { data: usersData } = await supabase.from('users').select('*').eq('is_active', true);
     if (usersData) setAllUsers(usersData);
+    const { data: pairsData } = await supabase.from('ojti_pairs').select('*').eq('is_active', true);
+    if (pairsData) setOjtiPairs(pairsData);
 
     const { data: userData } = await supabase
       .from('users')
@@ -300,10 +305,12 @@ export default function ScheduleScreen({ user }) {
         </TouchableOpacity>
       );
     }
+    const displayInitial = board.users?.initial || board.temp_initial || '';
+    const displayColor = board.users?.color_hex || '#94a3b8';
     return (
-      <TouchableOpacity key={pos} onPress={onPressCell} disabled={!onPressCell} style={[styles.dataCell, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
-        <Text style={styles.dataCellText}>{board.users?.initial || ''}</Text>
-        <View style={[styles.cellLeftStripe, { backgroundColor: board.users?.color_hex || 'transparent' }]} />
+      <TouchableOpacity key={pos} onPress={onPressCell} disabled={!onPressCell} style={[styles.dataCell, { backgroundColor: displayColor }]}>
+        <Text style={styles.dataCellText}>{displayInitial}</Text>
+        <View style={[styles.cellLeftStripe, { backgroundColor: displayColor }]} />
       </TouchableOpacity>
     );
   }
@@ -753,28 +760,45 @@ export default function ScheduleScreen({ user }) {
                 {editingBoard.positions?.code} · {editingBoard.start_zulu?.slice(0,5)}Z — {editingBoard.end_zulu?.slice(0,5)}Z
               </Text>
             )}
-            <Text style={{ fontSize: 12, fontWeight: '600', color: '#1a2744', marginBottom: 10 }}>Kişi seç</Text>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {allUsers.filter(u => !u.is_ojti && u.role !== 'chief').map(u => (
-                <TouchableOpacity
-                  key={u.id}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderBottomWidth: 0.5, borderBottomColor: '#e2eaf4' }}
-                  onPress={async () => {
-                    if (!editingBoard) return;
-                    await supabase.from('boards').update({ user_id: u.id }).eq('id', editingBoard.id);
-                    setEditBoardModal(false);
-                    setEditingBoard(null);
-                    loadSchedule();
-                  }}
-                >
-                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: u.color_hex + '33', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: u.color_hex }}>{u.initial}</Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#1a2744' }}>{u.full_name}</Text>
-                  {editingBoard?.user_id === u.id && <Text style={{ marginLeft: 'auto', color: '#1a2744', fontSize: 12 }}>✓</Text>}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#1a2744', marginBottom: 8 }}>Initial gir</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              <TextInput
+                style={{ flex: 1, borderWidth: 1, borderColor: '#e2eaf4', borderRadius: 8, padding: 10, fontSize: 16, fontWeight: '700' }}
+                placeholder="örn: AB"
+                maxLength={3}
+                autoCapitalize="characters"
+                value={tempInitial}
+                onChangeText={setTempInitial}
+              />
+              <TouchableOpacity
+                style={{ backgroundColor: '#1a2744', borderRadius: 8, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center' }}
+                onPress={async () => {
+                  if (!tempInitial || !editingBoard) return;
+                  const matchUser = allUsers.find(u => u.initial.toUpperCase() === tempInitial.toUpperCase());
+                  let updateData;
+                  if (matchUser) {
+                    if (matchUser.is_ojti) {
+                      // OJTI girildiyse rate'lisi ile birlikte yaz
+                      const ojtiPair = ojtiPairs?.find(p => p.ojti_user_id === matchUser.id);
+                      updateData = { user_id: ojtiPair?.rate_user_id || matchUser.id, ojti_user_id: matchUser.id, temp_initial: null };
+                    } else {
+                      updateData = { user_id: matchUser.id, ojti_user_id: null, temp_initial: null };
+                    }
+                  } else {
+                    updateData = { user_id: null, ojti_user_id: null, temp_initial: tempInitial.toUpperCase() };
+                  }
+                  const { error } = await supabase.from('boards').update(updateData).eq('id', editingBoard.id);
+                  if (error) { alert('Hata: ' + error.message); return; }
+                  setTempInitial('');
+                  setEditBoardModal(false);
+                  setEditingBoard(null);
+                  fetchAll();
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Kaydet</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}>Ekipteki biri ise otomatik eşleşir, değilse geçici olarak kaydedilir.</Text>
             <TouchableOpacity style={{ marginTop: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: '#e2eaf4', alignItems: 'center' }} onPress={() => { setEditBoardModal(false); setEditingBoard(null); }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748b' }}>Kapat</Text>
             </TouchableOpacity>
