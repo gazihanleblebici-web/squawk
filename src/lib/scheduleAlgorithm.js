@@ -546,7 +546,7 @@ export async function generateSchedule({
   });
 
   // AIT belirle
-  const nonChiefUsers = activeUsers.filter(u => u.role !== 'chief' && !u.is_ojti);
+  const nonChiefUsers = activeUsers.filter(u => u.role !== 'chief' && !u.is_ojti && (shiftType === 'day' || !u.day_only));
 
   const { data: lastAit } = await supabase
     .from('schedules')
