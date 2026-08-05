@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { supabase } from '../lib/supabase';
 
@@ -47,6 +48,16 @@ export default function StatsScreen() {
   const [nightOffRange, setNightOffRange] = useState({ start: firstOfMonth, end: todayStr });
 
   useEffect(() => { fetchUsers(); }, []);
+
+  useFocusEffect(useCallback(() => {
+    if (users.length) {
+      fetchDayStats();
+      fetchNightMainStats();
+      fetchNightGroupStats();
+      fetchMorningStats();
+      fetchNightOffStats();
+    }
+  }, [users, dayRange, nightMainRange, nightGroupRange, morningRange, nightOffRange]));
   useEffect(() => { if (users.length) fetchDayStats(); }, [users, dayRange]);
   useEffect(() => { if (users.length) fetchNightMainStats(); }, [users, nightMainRange]);
   useEffect(() => { if (users.length) fetchNightGroupStats(); }, [users, nightGroupRange]);
