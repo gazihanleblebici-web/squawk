@@ -294,7 +294,7 @@ export default function ScheduleScreen({ user }) {
       return (
         <TouchableOpacity key={pos} onPress={onPressCell} disabled={!onPressCell} style={styles.ojtiCell}>
           <View style={[styles.ojtiHalf, { backgroundColor: board.users?.color_hex || '#f1f5f9' }]}>
-            <Text style={styles.dataCellText}>{board.users?.initial}</Text>
+            <Text style={styles.dataCellText}>{board.users?.initial || board.temp_initial || ''}</Text>
           </View>
           <View style={[styles.ojtiHalf, { backgroundColor: board.ojti?.color_hex || '#f1f5f9' }]}>
             <Text style={styles.dataCellText}>{board.ojti?.initial}</Text>
@@ -357,12 +357,12 @@ export default function ScheduleScreen({ user }) {
     return (
       <View style={styles.simpleBlockRow}>
         {blockBoards.map(board => (
-          <View key={board.id} style={styles.simpleBlockChipWrap}>
+          <TouchableOpacity key={board.id} style={styles.simpleBlockChipWrap} onPress={isChief ? () => { setEditingBoard(board); setEditBoardModal(true); } : null} disabled={!isChief}>
             {board.ojti ? (
               <View style={{ width: 110, minHeight: 70, borderRadius: 10, flexDirection: 'row', overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 }}>
                 <View style={{ flex: 1, backgroundColor: board.users?.color_hex || '#f1f5f9', justifyContent: 'space-between', alignItems: 'stretch', padding: 6, borderLeftWidth: 3, borderLeftColor: board.users?.color_hex || '#ccc' }}>
                   <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600' }}>{board.start_zulu?.slice(0,5)}Z</Text>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#1a2744', textAlign: 'center' }}>{board.users?.initial}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#1a2744', textAlign: 'center' }}>{board.users?.initial || board.temp_initial || ''}</Text>
                   <Text style={{ fontSize: 9, color: '#1a2744', textAlign: 'right', fontWeight: '600' }}>{board.end_zulu?.slice(0,5)}Z</Text>
                 </View>
                 <View style={{ flex: 1, backgroundColor: board.ojti?.color_hex || '#e2e8f0', justifyContent: 'space-between', alignItems: 'stretch', padding: 6, borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.5)' }}>
@@ -375,11 +375,11 @@ export default function ScheduleScreen({ user }) {
             ) : (
               <View style={[styles.simpleBlockChip, { backgroundColor: board.users?.color_hex || '#f1f5f9', borderLeftWidth: 3, borderLeftColor: 'rgba(0,0,0,0.2)', justifyContent: 'space-between', alignItems: 'stretch', padding: 6 }]}>
                 <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600' }}>{board.start_zulu?.slice(0,5)}Z</Text>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#1a2744', textAlign: 'center' }}>{board.users?.initial}</Text>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#1a2744', textAlign: 'center' }}>{board.users?.initial || board.temp_initial || ''}</Text>
                 <Text style={{ fontSize: 9, color: '#1a2744', textAlign: 'right', fontWeight: '600' }}>{board.end_zulu?.slice(0,5)}Z</Text>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
     );
@@ -441,12 +441,12 @@ export default function ScheduleScreen({ user }) {
                     const top = (bStart - startMin) * PX_PER_MIN;
                     const height = (bEnd - bStart) * PX_PER_MIN;
                     return (
-                      <View key={board.id} style={[styles.offsetBlock, { top, height: Math.max(height, 48), backgroundColor: board.users?.color_hex + '33' || '#f1f5f9', overflow: 'hidden', padding: 0, flexDirection: 'column', borderLeftWidth: 3, borderLeftColor: board.users?.color_hex || '#ccc' }]}>
+                      <TouchableOpacity key={board.id} onPress={isChief ? () => { setEditingBoard(board); setEditBoardModal(true); } : null} disabled={!isChief} style={[styles.offsetBlock, { top, height: Math.max(height, 48), backgroundColor: board.users?.color_hex + '33' || '#f1f5f9', overflow: 'hidden', padding: 0, flexDirection: 'column', borderLeftWidth: 3, borderLeftColor: board.users?.color_hex || '#ccc' }]}>
                         {board.ojti ? (
                           <>
                             <View style={{ flex: 1, width: '100%', justifyContent: 'space-between', alignItems: 'stretch', backgroundColor: board.users?.color_hex || '#f1f5f9' }}>
                               <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600', paddingHorizontal: 4, paddingTop: 3 }}>{board.start_zulu?.slice(0,5)}</Text>
-                              <Text style={[styles.offsetBlockInitial, { textAlign: 'center' }]}>{board.users?.initial}</Text>
+                              <Text style={[styles.offsetBlockInitial, { textAlign: 'center' }]}>{board.users?.initial || board.temp_initial || ''}</Text>
                               <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600', textAlign: 'right', paddingHorizontal: 4, paddingBottom: 3 }}>{board.end_zulu?.startsWith('00:00') ? '06:00' : board.end_zulu?.slice(0,5)}</Text>
                             </View>
                             <View style={{ flex: 1, width: '100%', justifyContent: 'space-between', alignItems: 'stretch', backgroundColor: board.ojti?.color_hex || '#e2e8f0', borderTopWidth: 1.5, borderTopColor: 'rgba(255,255,255,0.7)' }}>
@@ -459,11 +459,11 @@ export default function ScheduleScreen({ user }) {
                         ) : (
                           <View style={{ flex: 1, flexDirection: 'column', justifyContent: 'space-between', alignItems: 'stretch', width: '100%' }}>
                             <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600', paddingHorizontal: 4, paddingTop: 3 }}>{board.start_zulu?.slice(0,5)}</Text>
-                            <Text style={[styles.offsetBlockInitial, { textAlign: 'center' }]}>{board.users?.initial}</Text>
+                            <Text style={[styles.offsetBlockInitial, { textAlign: 'center' }]}>{board.users?.initial || board.temp_initial || ''}</Text>
                             <Text style={{ fontSize: 9, color: '#1a2744', fontWeight: '600', textAlign: 'right', paddingHorizontal: 4, paddingBottom: 3 }}>{board.end_zulu?.startsWith('00:00') ? '06:00' : board.end_zulu?.slice(0,5)}</Text>
                           </View>
                         )}
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
               </View>
@@ -782,17 +782,29 @@ export default function ScheduleScreen({ user }) {
                       const ojtiPair = ojtiPairs?.find(p => p.ojti_user_id === matchUser.id);
                       updateData = { user_id: ojtiPair?.rate_user_id || matchUser.id, ojti_user_id: matchUser.id, temp_initial: null };
                     } else {
-                      updateData = { user_id: matchUser.id, ojti_user_id: null, temp_initial: null };
+                      // Rate'li ATC girildiyse, bu kişinin OJTI'si var mı kontrol et
+                      const rateOjtiPair = ojtiPairs?.find(p => p.rate_user_id === matchUser.id);
+                      const ojtiUser = rateOjtiPair ? allUsers.find(u => u.id === rateOjtiPair.ojti_user_id) : null;
+                      updateData = { user_id: matchUser.id, ojti_user_id: ojtiUser?.id || null, temp_initial: null };
                     }
                   } else {
                     updateData = { user_id: null, ojti_user_id: null, temp_initial: tempInitial.toUpperCase() };
                   }
                   const { error } = await supabase.from('boards').update(updateData).eq('id', editingBoard.id);
                   if (error) { alert('Hata: ' + error.message); return; }
+                  // Guncellenen board'u Supabase'den cek
+                  const { data: updatedBoard } = await supabase
+                    .from('boards')
+                    .select('*, positions(*), users!boards_user_id_fkey(*), ojti:users!boards_ojti_user_id_fkey(*)')
+                    .eq('id', editingBoard.id)
+                    .single();
+                  if (updatedBoard) {
+                    console.log('updatedBoard:', JSON.stringify(updatedBoard));
+                    setBoards(prev => prev.map(b => b.id === editingBoard.id ? updatedBoard : b));
+                  }
                   setTempInitial('');
                   setEditBoardModal(false);
                   setEditingBoard(null);
-                  fetchAll();
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Kaydet</Text>
