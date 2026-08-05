@@ -567,6 +567,22 @@ export default function ScheduleScreen({ user }) {
 
           {shiftBlocks.map(block => renderBlock(block))}
 
+          {shiftType === 'night' && boards.filter(b => b.is_night_off).length > 0 && (
+            <View style={[styles.aitCard, { backgroundColor: '#f8faff', borderColor: '#e2eaf4' }]}>
+              <Text style={[styles.aitLabel, { color: '#64748b' }]}>🌙 Gece OFF</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                {boards.filter(b => b.is_night_off).map(b => (
+                  <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.aitBadge, { backgroundColor: b.users?.color_hex || '#94a3b8' }]}>
+                      <Text style={styles.aitBadgeText}>{b.users?.initial || '?'}</Text>
+                    </View>
+                    <Text style={styles.aitName}>{b.users?.full_name || ''}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
           {aitUser && (
             <View style={styles.aitCard}>
               <Text style={styles.aitLabel}>📋 AIT Gorevi</Text>
@@ -889,7 +905,7 @@ const styles = StyleSheet.create({
   ojtiHalf: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   ojtiBadge: { position: 'absolute', top: 0, right: 0, width: 0, height: 0, borderStyle: 'solid', borderTopWidth: 14, borderRightWidth: 14, borderTopColor: '#7c3aed', borderRightColor: '#7c3aed', borderLeftWidth: 14, borderLeftColor: 'transparent', borderBottomWidth: 14, borderBottomColor: 'transparent' },
   ojtiBadgeIcon: { position: 'absolute', top: -12, right: -2, fontSize: 9 },
-  scheduleScrollContent: { paddingBottom: 180 },
+  scheduleScrollContent: { paddingBottom: 300 },
   emptyBlock: { marginHorizontal: 16, marginBottom: 8, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2eaf4', borderStyle: 'dashed' },
   emptyBlockText: { fontSize: 11, color: '#94a3b8', textAlign: 'center' },
   simpleBlockRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 8, paddingBottom: 8 },

@@ -266,10 +266,20 @@ async function buildNightSchedule({
   // Shuffle
   const shuffled = [...boardPeople].sort(() => Math.random() - 0.5);
 
-const sabahciCount = n >= 9 ? 5 : n >= 7 ? 4 : Math.max(2, Math.floor(n * 0.4));
+  // Sabahci pozisyon sayisina gore sabahci kisi sayisi: 3 pozisyon=4 kisi, 4 pozisyon=5 kisi
+  const morningPosCount = (selectedMorningPositions && selectedMorningPositions.length > 0)
+    ? selectedMorningPositions.length
+    : 4;
+  const sabahciCount = morningPosCount >= 4 ? 5 : 4;
+
+  // Gece off sayisi = toplam aktif - (4 gececi/araci + sabahciCount)
+  const nightOffCount = Math.max(0, n - (4 + sabahciCount));
+
+  // Sabahci, gececi, araci once atansin, kalan gece off olsun
   const sabahcilar = shuffled.slice(0, sabahciCount);
   const gececilar = shuffled.slice(sabahciCount, sabahciCount + 2);
   const aracilar = shuffled.slice(sabahciCount + 2, sabahciCount + 4);
+  const nightOffUsers = shuffled.slice(sabahciCount + 4);
 
   const noLastSlot = new Set(gececilar.map(p => p.id));
   const preferNoLastSlot = new Set(aracilar.map(p => p.id));
@@ -333,17 +343,19 @@ const sabahciCount = n >= 9 ? 5 : n >= 7 ? 4 : Math.max(2, Math.floor(n * 0.4));
       (selectedMorningPositions.length > 0 ? selectedMorningPositions.includes(p) : true) && positions.includes(p)
     );
 
-    if (isOffsetMorning && sabahcilar.length >= 5) {
+    if (isOffsetMorning && sabahcilar.length >= 4) {
       const workTime = {};
       const posUsed = {};
       const restQueue = [];
       sabahcilar.forEach(p => { workTime[p.id] = 0; posUsed[p.id] = new Set(); });
 
-      // Baslangic: ilk 3 kisi YWU, PLN, YZA yi 02:30 da alir
-      const active = { YWU: null, PLN: null, YZA: null, YZC: null };
-      const startedAt = { YWU: 0, PLN: 0, YZA: 0, YZC: 0 };
+      // Baslangic: POS_ALL den ilk N kisi ayni anda devir alir
+      const initPosCount = Math.min(POS_ALL.length - 1, sabahcilar.length - 1);
+      const initPos = POS_ALL.slice(0, initPosCount);
+      const active = {};
+      const startedAt = {};
+      POS_ALL.forEach(p => { active[p] = null; startedAt[p] = 0; });
 
-      const initPos = ['YWU', 'PLN', 'YZA'];
       initPos.forEach((pos, i) => {
         const p = sabahcilar[i];
         active[pos] = p;
@@ -351,21 +363,21 @@ const sabahciCount = n >= 9 ? 5 : n >= 7 ? 4 : Math.max(2, Math.floor(n * 0.4));
         posUsed[p.id].add(pos);
       });
 
-      // 4. kisi (D) YZC yi 03:00 da alir
-      const personD = sabahcilar[3];
-      // 5. kisi (E) 03:00 da bekleme kuyruğuna girer
-      const personE = sabahcilar[4];
+      // Son pozisyonu 03:00 da acan kisi (D) ve yedek kisi (E)
+      const lastInitPos = POS_ALL[initPosCount]; // Son pozisyon (YZC veya YZA)
+      const personD = sabahcilar[initPosCount] || null;
+      const personE = sabahcilar[initPosCount + 1] || null;
 
       for (let t = START_BASE + REST; t <= END; t += REST) {
-        // YZC 03:00 da acilir
-        if (t === YZC_OPEN && !active.YZC) {
-          active.YZC = personD;
-          startedAt.YZC = t;
-          posUsed[personD.id].add('YZC');
+        // Son pozisyon 03:00 da acilir
+        if (t === YZC_OPEN && lastInitPos && personD && !active[lastInitPos]) {
+          active[lastInitPos] = personD;
+          startedAt[lastInitPos] = t;
+          posUsed[personD.id].add(lastInitPos);
         }
 
-        // E yi 03:00 da kuyruga ekle
-        if (t === YZC_OPEN && !restQueue.find(r => r.person.id === personE.id)) {
+        // Yedek kisi 03:00 da kuyruga ekle
+        if (t === YZC_OPEN && personE && !restQueue.find(r => r.person.id === personE.id)) {
           restQueue.push({ person: personE, availableAt: t });
         }
 
@@ -507,6 +519,19 @@ if (elapsed >= 90 && waiting.length === 0) {
 
   if (boardsToInsert.length > 0) {
     await supabase.from('boards').insert(boardsToInsert);
+  }
+
+  // Gece off kisilerini kaydet
+  if (nightOffUsers && nightOffUsers.length > 0) {
+    const nightOffBoards = nightOffUsers.map(p => ({
+      schedule_id: scheduleId,
+      position_id: posMap['YWU'] || Object.values(posMap)[0],
+      user_id: p.id,
+      start_zulu: '16:00:00',
+      end_zulu: '21:00:00',
+      is_night_off: true,
+    }));
+    await supabase.from('boards').insert(nightOffBoards);
   }
 
   if (isOffsetMorning) {
