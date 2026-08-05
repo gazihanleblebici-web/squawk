@@ -43,12 +43,15 @@ export default function StatsScreen() {
   const [nightMainStats, setNightMainStats] = useState({});
   const [nightGroupStats, setNightGroupStats] = useState({});
   const [morningStats, setMorningStats] = useState({});
+  const [nightOffStats, setNightOffStats] = useState({});
+  const [nightOffRange, setNightOffRange] = useState({ start: firstOfMonth, end: todayStr });
 
   useEffect(() => { fetchUsers(); }, []);
   useEffect(() => { if (users.length) fetchDayStats(); }, [users, dayRange]);
   useEffect(() => { if (users.length) fetchNightMainStats(); }, [users, nightMainRange]);
   useEffect(() => { if (users.length) fetchNightGroupStats(); }, [users, nightGroupRange]);
   useEffect(() => { if (users.length) fetchMorningStats(); }, [users, morningRange]);
+  useEffect(() => { if (users.length) fetchNightOffStats(); }, [users, nightOffRange]);
 
   async function fetchUsers() {
     const { data } = await supabase.from('users').select('id,full_name,initial,color_hex,role,is_ojti').eq('is_active', true).order('full_name');
@@ -134,6 +137,19 @@ export default function StatsScreen() {
       else if (startMin < 2 * 60 + 30) stats[b.user_id].araci += dur;
     });
     setNightGroupStats(stats);
+  }
+
+  async function fetchNightOffStats() {
+    const { data: schedules } = await supabase.from('schedules').select('id')
+      .eq('shift_template_id', NIGHT_TEMPLATE).gte('schedule_date', nightOffRange.start).lte('schedule_date', nightOffRange.end);
+    if (!schedules?.length) { setNightOffStats({}); return; }
+    const ids = schedules.map(s => s.id);
+    const { data: boards } = await supabase.from('boards').select('user_id').in('schedule_id', ids).eq('is_night_off', true);
+    if (!boards) return;
+    const stats = {};
+    users.forEach(u => { stats[u.id] = 0; });
+    boards.forEach(b => { if (stats[b.user_id] !== undefined) stats[b.user_id]++; });
+    setNightOffStats(stats);
   }
 
   async function fetchMorningStats() {
@@ -248,6 +264,31 @@ export default function StatsScreen() {
               </View>
               <View style={s.cellWide}><PillCell value={minToTime(nightGroupStats[u.id]?.gececi)} /></View>
               <View style={s.cellWide}><PillCell value={minToTime(nightGroupStats[u.id]?.araci)} /></View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={s.section}>
+        <View style={s.sectionHeader}><Text style={s.sectionTitle}>Gece OFF</Text></View>
+        <DateRange start={nightOffRange.start} end={nightOffRange.end}
+          onChangeStart={v => setNightOffRange(r => ({...r, start: v}))}
+          onChangeEnd={v => setNightOffRange(r => ({...r, end: v}))} />
+        <View style={s.tableWrap}>
+          <View style={s.tableHead}>
+            <View style={[s.cell, s.cellName]}><Text style={s.headText}>Kişi</Text></View>
+            <View style={s.cellWide}><Text style={s.headText}>OFF sayısı</Text></View>
+          </View>
+          {ratedUsers.sort((a, b) => (nightOffStats[a.id] || 0) - (nightOffStats[b.id] || 0)).map(u => (
+            <View key={u.id} style={s.tableRow}>
+              <View style={[s.cell, s.cellName]}>
+                <View style={[s.avatar, { backgroundColor: u.color_hex + '33' }]}>
+                  <Text style={[s.avatarText, { color: u.color_hex }]}>{u.initial}</Text>
+                </View>
+              </View>
+              <View style={s.cellWide}>
+                <PillCell value={nightOffStats[u.id] || 0} />
+              </View>
             </View>
           ))}
         </View>
