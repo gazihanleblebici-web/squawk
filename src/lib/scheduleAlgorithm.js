@@ -185,13 +185,6 @@ async function buildDaySchedule({
 
   const startMin = timeToMinutes(block.start_zulu);
   const endMin = timeToMinutes(block.end_zulu);
-  const slotCount = Math.round((endMin - startMin) / 60);
-
-  const slots = [];
-  for (let i = 0; i < slotCount; i++) {
-    slots.push(minutesToTime(startMin + i * 60));
-  }
-
   // Ekip şefi kuralı: rate'li ATC (şef ve OJTI haric) sayisi 10'dan azsa
   // şef de board alir (toplamda 10'a tamamlamak icin). 10 veya fazlaysa şef almaz.
   const ratedCount = activeUsers.filter(u => u.role !== 'chief' && !u.is_ojti).length;
@@ -203,6 +196,13 @@ async function buildDaySchedule({
     return true;
   });
 
+  // Kisi sayisina gore board suresi: 10+ kisi = 60dk, 8-9 kisi = 75dk
+  const slotDuration = boardPeople.length >= 10 ? 60 : 75;
+  const slotCount = Math.floor((endMin - startMin) / slotDuration);
+  const slots = [];
+  for (let i = 0; i < slotCount; i++) {
+    slots.push(minutesToTime(startMin + i * slotDuration));
+  }
 
   const ojtiUsers = activeUsers.filter(u => u.is_ojti);
   const assignments = buildRotation(boardPeople, positions, slots);
@@ -484,7 +484,7 @@ if (elapsed >= 90 && waiting.length === 0) {
           user_id: a.person.id,
           ojti_user_id: ojtiA?.ojtiUserId || null,
           start_zulu: a.slot,
-          end_zulu: minutesToTime(timeToMinutes(a.slot) + 60),
+          end_zulu: minutesToTime(timeToMinutes(a.slot) + slotDuration),
         };
       }),
     ...[...gececiBoards, ...araciBoards, ...sabahciBoards]
