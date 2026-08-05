@@ -86,7 +86,7 @@ export default function StatsScreen() {
       .eq('shift_template_id', DAY_TEMPLATE).gte('schedule_date', dayRange.start).lte('schedule_date', dayRange.end);
     if (!schedules?.length) { setDayStats({}); return; }
     const ids = schedules.map(s => s.id);
-    const { data: boards } = await supabase.from('boards').select('user_id, start_zulu, end_zulu, positions(code)').in('schedule_id', ids);
+    const { data: boards } = await supabase.from('boards').select('user_id, start_zulu, end_zulu, is_last_board, positions(code)').in('schedule_id', ids);
     if (!boards) return;
     const stats = {};
     users.forEach(u => { stats[u.id] = { positions: {}, lastSlot: 0 }; POSITIONS_DAY.forEach(p => stats[u.id].positions[p] = 0); });
@@ -95,7 +95,7 @@ export default function StatsScreen() {
       const pos = b.positions?.code;
       const dur = boardDuration(b.start_zulu, b.end_zulu);
       if (pos && POSITIONS_DAY.includes(pos)) stats[b.user_id].positions[pos] += dur;
-      if (b.start_zulu?.startsWith('15:')) stats[b.user_id].lastSlot++;
+      if (b.is_last_board) stats[b.user_id].lastSlot++;
     });
     setDayStats(stats);
   }

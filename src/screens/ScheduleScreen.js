@@ -68,10 +68,27 @@ export default function ScheduleScreen({ user }) {
   const isChief = user?.role === 'chief';
   const todayDate = new Date();
   const todayStr = todayDate.toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [calendarModal, setCalendarModal] = useState(false);
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [monthSchedules, setMonthSchedules] = useState([]);
 
   useEffect(() => {
     fetchAll();
-  }, [shiftType]);
+  }, [shiftType, selectedDate]);
+
+  async function fetchMonthSchedules(year, month) {
+    const firstDay = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const lastDay = new Date(year, month+1, 0).toISOString().split('T')[0];
+    const { data } = await supabase
+      .from('schedules')
+      .select('schedule_date, shift_template_id')
+      .gte('schedule_date', firstDay)
+      .lte('schedule_date', lastDay)
+      .in('status', ['approved', 'draft']);
+    if (data) setMonthSchedules(data);
+  }
 
   async function loadSchedule() {
     if (!scheduleInfo?.id) return;
@@ -127,8 +144,9 @@ export default function ScheduleScreen({ user }) {
       .from('schedules')
       .select('*')
       .eq('shift_template_id', shiftRow.id)
+      .eq('schedule_date', selectedDate)
       .in('status', ['approved', 'draft'])
-      .order('schedule_date', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -509,6 +527,25 @@ export default function ScheduleScreen({ user }) {
             </TouchableOpacity>
           )}
         </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, gap: 16 }}>
+          <TouchableOpacity onPress={() => {
+            const d = new Date(selectedDate);
+            d.setDate(d.getDate() - 1);
+            setSelectedDate(d.toISOString().split('T')[0]);
+          }}>
+            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>‹</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { setCalendarYear(new Date(selectedDate).getFullYear()); setCalendarMonth(new Date(selectedDate).getMonth()); fetchMonthSchedules(new Date(selectedDate).getFullYear(), new Date(selectedDate).getMonth()); setCalendarModal(true); }}>
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' }}>{selectedDate}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => {
+            const d = new Date(selectedDate);
+            d.setDate(d.getDate() + 1);
+            setSelectedDate(d.toISOString().split('T')[0]);
+          }}>
+            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>›</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.toggleRow}>
@@ -768,6 +805,69 @@ export default function ScheduleScreen({ user }) {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={calendarModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxWidth: 340, width: '100%' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <TouchableOpacity onPress={() => { const m = calendarMonth === 0 ? 11 : calendarMonth-1; const y = calendarMonth === 0 ? calendarYear-1 : calendarYear; setCalendarMonth(m); setCalendarYear(y); fetchMonthSchedules(y, m); }}>
+                <Text style={{ fontSize: 20, color: '#1a2744' }}>‹</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1a2744' }}>
+                {['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'][calendarMonth]} {calendarYear}
+              </Text>
+              <TouchableOpacity onPress={() => { const m = calendarMonth === 11 ? 0 : calendarMonth+1; const y = calendarMonth === 11 ? calendarYear+1 : calendarYear; setCalendarMonth(m); setCalendarYear(y); fetchMonthSchedules(y, m); }}>
+                <Text style={{ fontSize: 20, color: '#1a2744' }}>›</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              {['Pt','Sa','Ça','Pe','Cu','Ct','Pz'].map(d => (
+                <Text key={d} style={{ flex: 1, textAlign: 'center', fontSize: 10, color: '#94a3b8', fontWeight: '600' }}>{d}</Text>
+              ))}
+            </View>
+            {(() => {
+              const firstDow = (new Date(calendarYear, calendarMonth, 1).getDay() + 6) % 7;
+              const daysInMonth = new Date(calendarYear, calendarMonth+1, 0).getDate();
+              const cells = [];
+              for (let i = 0; i < firstDow; i++) cells.push(null);
+              for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+              while (cells.length % 7 !== 0) cells.push(null);
+              const rows = [];
+              for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i+7));
+              return rows.map((row, ri) => (
+                <View key={ri} style={{ flexDirection: 'row', marginBottom: 3 }}>
+                  {row.map((day, ci) => {
+                    if (!day) return <View key={ci} style={{ flex: 1, height: 34 }} />;
+                    const ds = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const sch = monthSchedules.filter(s => s.schedule_date === ds);
+                    const hasDay = sch.some(s => s.shift_template_id === '1a4ce9d9-7ce0-435f-bfc8-fd74d84830b1');
+                    const hasNight = sch.some(s => s.shift_template_id === 'ecd9ef04-2408-439f-b729-62d93977cf53');
+                    const isSelected = ds === selectedDate;
+                    const isToday = ds === todayStr;
+                    return (
+                      <TouchableOpacity key={ci} style={{ flex: 1, height: 34, borderRadius: 6, margin: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? '#1a2744' : hasDay && hasNight ? '#7c3aed22' : hasDay ? '#ef444422' : hasNight ? '#3b82f622' : 'transparent', borderWidth: isToday ? 1.5 : 0, borderColor: '#1a2744' }}
+                        onPress={() => { setSelectedDate(ds); setCalendarModal(false); }}>
+                        <Text style={{ fontSize: 12, fontWeight: isSelected || isToday ? '700' : '400', color: isSelected ? '#fff' : isToday ? '#1a2744' : '#1a2744' }}>{day}</Text>
+                        <View style={{ flexDirection: 'row', gap: 2 }}>
+                          {hasDay && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#ef4444' }} />}
+                          {hasNight && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#3b82f6' }} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ));
+            })()}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, justifyContent: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} /><Text style={{ fontSize: 10, color: '#64748b' }}>Gündüz</Text></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3b82f6' }} /><Text style={{ fontSize: 10, color: '#64748b' }}>Gece</Text></View>
+            </View>
+            <TouchableOpacity style={{ marginTop: 12, padding: 10, alignItems: 'center' }} onPress={() => setCalendarModal(false)}>
+              <Text style={{ color: '#64748b', fontSize: 13 }}>Kapat</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

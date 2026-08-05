@@ -234,6 +234,7 @@ async function buildDaySchedule({
         ojti_user_id: ojtiA?.ojtiUserId || null,
         start_zulu: a.slot,
         end_zulu: minutesToTime(timeToMinutes(a.slot) + slotDuration),
+        is_last_board: a.slot === slots[slots.length - 1],
       };
     });
 

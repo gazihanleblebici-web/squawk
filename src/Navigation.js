@@ -80,6 +80,7 @@ export default function Navigation({ user, onLogout }) {
           options={{
             tabBarLabel: 'Program',
             tabBarIcon: ({ color, size }) => <TabIcon name="grid" color={color} size={size} />,
+            headerShown: false,
           }}
         >
           {() => <ScheduleScreen user={user} />}
