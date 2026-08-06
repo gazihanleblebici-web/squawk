@@ -204,8 +204,25 @@ async function buildDaySchedule({
     slots.push(minutesToTime(startMin + i * slotDuration));
   }
 
+  // Son board istatistiklerini cek - en cok son board alan son saate yazilmasin
+  const { data: lastBoardStats } = await supabase
+    .from('boards')
+    .select('user_id')
+    .in('user_id', boardPeople.map(p => p.id))
+    .eq('is_last_board', true);
+
+  const lastBoardCounts = {};
+  boardPeople.forEach(p => { lastBoardCounts[p.id] = 0; });
+  lastBoardStats?.forEach(b => { if (lastBoardCounts[b.user_id] !== undefined) lastBoardCounts[b.user_id]++; });
+
+  // En cok son board alanlar noLastSlot'a ekle (max alan + ortalama 1 ustundekiler)
+  const avgLastBoard = Object.values(lastBoardCounts).reduce((a, b) => a + b, 0) / boardPeople.length;
+  const noLastSlotDay = new Set(
+    boardPeople.filter(p => lastBoardCounts[p.id] > avgLastBoard).map(p => p.id)
+  );
+
   const ojtiUsers = activeUsers.filter(u => u.is_ojti);
-  const assignments = buildRotation(boardPeople, positions, slots);
+  const assignments = buildRotationWithConstraints(boardPeople, positions, slots, noLastSlotDay, new Set());
 
   // OJTI eşleştirmeleri - OJTI her zaman rate'i ile birlikte, her board'da
   const ojtiAssignments = [];
