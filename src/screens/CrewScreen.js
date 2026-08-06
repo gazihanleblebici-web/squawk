@@ -30,6 +30,13 @@ export default function CrewScreen({ user }) {
   const [editingUser, setEditingUser] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
   const [statusModalUser, setStatusModalUser] = useState(null);
+  const [statusStartDate, setStatusStartDate] = useState('');
+  const [statusEndDate, setStatusEndDate] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('annual_leave');
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [shiftStartDate, setShiftStartDate] = useState(null);
+  const [shiftStartType, setShiftStartType] = useState('day');
 
   const [formName, setFormName] = useState('');
   const [formInitial, setFormInitial] = useState('');
@@ -38,11 +45,38 @@ export default function CrewScreen({ user }) {
   const [formDayOnly, setFormDayOnly] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
+  const [selectedCrewDate, setSelectedCrewDate] = useState(today);
+  const [crewCalModal, setCrewCalModal] = useState(false);
+  const [crewCalYear, setCrewCalYear] = useState(new Date().getFullYear());
+  const [crewCalMonth, setCrewCalMonth] = useState(new Date().getMonth());
+  const [monthStatusData, setMonthStatusData] = useState([]);
 const isChief = user?.role === 'chief';
 
   useEffect(() => {
     fetchAll();
-  }, []);
+    fetchShiftInfo();
+  }, [selectedCrewDate]);
+
+  async function fetchMonthStatus(year, month) {
+    const firstDay = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const lastDay = new Date(year, month+1, 0).toISOString().split('T')[0];
+    const { data } = await supabase.from('user_day_status').select('user_id, status, status_date').gte('status_date', firstDay).lte('status_date', lastDay);
+    if (data) setMonthStatusData(data);
+  }
+
+  async function fetchShiftInfo() {
+    const { data } = await supabase.from('users').select('shift_start_date, shift_start_type').eq('role', 'chief').limit(1).maybeSingle();
+    if (data) { setShiftStartDate(data.shift_start_date); setShiftStartType(data.shift_start_type || 'day'); }
+  }
+
+  function getShiftType(dateStr) {
+    if (!shiftStartDate) return null;
+    const diff = Math.round((new Date(dateStr) - new Date(shiftStartDate)) / 86400000);
+    if (diff < 0) return null;
+    const cycle = diff % 5;
+    if (shiftStartType === 'day') return cycle === 0 ? 'day' : cycle === 1 ? 'night' : 'off';
+    return cycle === 0 ? 'night' : cycle === 1 ? 'off' : cycle === 2 ? 'off' : cycle === 3 ? 'off' : 'day';
+  }
 
   async function fetchAll() {
     setLoading(true);
@@ -62,7 +96,7 @@ const isChief = user?.role === 'chief';
     const { data: statusData } = await supabase
       .from('user_day_status')
       .select('*')
-      .eq('status_date', today);
+      .eq('status_date', selectedCrewDate);
 
     if (statusData) {
       const map = {};
@@ -81,12 +115,13 @@ const isChief = user?.role === 'chief';
     return STATUS_OPTIONS.find(s => s.value === statusValue) || STATUS_OPTIONS[0];
   }
 
-  async function setUserStatus(userId, status, hourlyPeriod = null) {
-    const existing = dayStatuses[userId];
+  async function setUserStatus(userId, status, hourlyPeriod = null, customDate = null) {
+    const statusDate = customDate || today;
+    const existing = customDate ? null : dayStatuses[userId];
 
     const payload = {
       user_id: userId,
-      status_date: today,
+      status_date: statusDate,
       status,
     };
 
@@ -243,7 +278,7 @@ const isChief = user?.role === 'chief';
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.headerTitle}>Ekip Listesi</Text>
-            <Text style={styles.headerSub}>{users.length} kişi · Bugün {activeCount} mevcut</Text>
+            <Text style={styles.headerSub}>{users.length} kişi · {activeCount} mevcut</Text>
           </View>
           {isChief && (
             <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
@@ -251,10 +286,29 @@ const isChief = user?.role === 'chief';
             </TouchableOpacity>
           )}
         </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, gap: 16 }}>
+          <TouchableOpacity onPress={() => { const d = new Date(selectedCrewDate); d.setDate(d.getDate()-1); setSelectedCrewDate(d.toISOString().split('T')[0]); }}>
+            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>‹</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => {
+            const d = new Date(selectedCrewDate);
+            setCrewCalYear(d.getFullYear());
+            setCrewCalMonth(d.getMonth());
+            fetchMonthStatus(d.getFullYear(), d.getMonth());
+            setCrewCalModal(true);
+          }}>
+            <Text style={{ color: selectedCrewDate === today ? '#fbbf24' : '#fff', fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' }}>
+              {selectedCrewDate === today ? 'Bugün' : selectedCrewDate}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { const d = new Date(selectedCrewDate); d.setDate(d.getDate()+1); setSelectedCrewDate(d.toISOString().split('T')[0]); }}>
+            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>›</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.todayLabel}>📅 Bugünkü Durum — Plandan Önce Doldurulmalı</Text>
+        <Text style={styles.todayLabel}>📅 {selectedCrewDate === today ? 'Bugünkü' : selectedCrewDate} Durum — Plandan Önce Doldurulmalı</Text>
 
         {users.map(item => {
           const statusVal = getStatus(item.id);
@@ -423,46 +477,210 @@ const isChief = user?.role === 'chief';
         </View>
       </Modal>
 
-      <Modal visible={!!statusModalUser} transparent animationType="slide">
+      <Modal visible={crewCalModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {statusModalUser?.full_name} — Bugünkü Durum
-            </Text>
-
-            {STATUS_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.value}
-                style={[styles.statusOption, { borderColor: opt.color }]}
-                onPress={() => {
-                  if (opt.value !== 'hourly_leave') {
-                    setUserStatus(statusModalUser.id, opt.value);
-                  }
-                }}
-              >
-                <View style={[styles.statusDot, { backgroundColor: opt.color }]} />
-                <Text style={styles.statusOptionText}>{opt.label}</Text>
+          <View style={[styles.modalCard, { borderRadius: 20, maxHeight: '85%' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <TouchableOpacity onPress={() => { const m = crewCalMonth === 0 ? 11 : crewCalMonth-1; const y = crewCalMonth === 0 ? crewCalYear-1 : crewCalYear; setCrewCalMonth(m); setCrewCalYear(y); fetchMonthStatus(y, m); }}>
+                <Text style={{ fontSize: 20, color: '#1a2744' }}>‹</Text>
               </TouchableOpacity>
-            ))}
-
-            <View style={styles.hourlyRow}>
-              <TouchableOpacity
-                style={styles.hourlyButton}
-                onPress={() => setUserStatus(statusModalUser.id, 'hourly_leave', 'morning')}
-              >
-                <Text style={styles.hourlyButtonText}>Saatlik - Öğleden Önce (06-11Z)</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.hourlyButton}
-                onPress={() => setUserStatus(statusModalUser.id, 'hourly_leave', 'afternoon')}
-              >
-                <Text style={styles.hourlyButtonText}>Saatlik - Öğleden Sonra (11-16Z)</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1a2744' }}>
+                {['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'][crewCalMonth]} {crewCalYear}
+              </Text>
+              <TouchableOpacity onPress={() => { const m = crewCalMonth === 11 ? 0 : crewCalMonth+1; const y = crewCalMonth === 11 ? crewCalYear+1 : crewCalYear; setCrewCalMonth(m); setCrewCalYear(y); fetchMonthStatus(y, m); }}>
+                <Text style={{ fontSize: 20, color: '#1a2744' }}>›</Text>
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setStatusModalUser(null)}>
-              <Text style={styles.cancelButtonText}>Kapat</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+              {['Pt','Sa','Ça','Pe','Cu','Ct','Pz'].map(d => (
+                <Text key={d} style={{ flex: 1, textAlign: 'center', fontSize: 10, color: '#94a3b8', fontWeight: '500' }}>{d}</Text>
+              ))}
+            </View>
+
+            {(() => {
+              const firstDow = (new Date(crewCalYear, crewCalMonth, 1).getDay() + 6) % 7;
+              const daysInMonth = new Date(crewCalYear, crewCalMonth+1, 0).getDate();
+              const cells = [];
+              for (let i = 0; i < firstDow; i++) cells.push(null);
+              for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+              while (cells.length % 7 !== 0) cells.push(null);
+              const rows = [];
+              for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i+7));
+              return rows.map((row, ri) => (
+                <View key={ri} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                  {row.map((day, ci) => {
+                    if (!day) return <View key={ci} style={{ flex: 1, height: 34 }} />;
+                    const ds = `${crewCalYear}-${String(crewCalMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const shift = getShiftType(ds);
+                    const isSelected = ds === selectedCrewDate;
+                    const isToday = ds === today;
+                    const dayStatuses = monthStatusData.filter(s => s.status_date === ds);
+                    const hasLeave = dayStatuses.some(s => s.status !== 'active');
+                    const shiftBg = shift === 'day' ? '#fef2f2' : shift === 'night' ? '#eff6ff' : shift === 'off' ? '#f0fdf4' : 'transparent';
+                    const shiftDot = shift === 'day' ? '#ef4444' : shift === 'night' ? '#3b82f6' : shift === 'off' ? '#22c55e' : null;
+                    return (
+                      <TouchableOpacity key={ci} style={{ flex: 1, height: 34, borderRadius: 6, margin: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? '#1a2744' : shiftBg, borderWidth: isToday ? 1.5 : 0, borderColor: '#1a2744' }}
+                        onPress={() => { setSelectedCrewDate(ds); }}>
+                        <Text style={{ fontSize: 11, fontWeight: isSelected || isToday ? '700' : '400', color: isSelected ? '#fff' : '#1a2744' }}>{day}</Text>
+                        <View style={{ flexDirection: 'row', gap: 2 }}>
+                          {shiftDot && !isSelected && <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: shiftDot }} />}
+                          {hasLeave && !isSelected && <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: '#f59e0b' }} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ));
+            })()}
+
+            {selectedCrewDate && (() => {
+              const dayData = monthStatusData.filter(s => s.status_date === selectedCrewDate);
+              const dayUsers = users.map(u => {
+                const st = dayData.find(s => s.user_id === u.id);
+                return { ...u, status: st?.status || 'active' };
+              });
+              return (
+                <View style={{ marginTop: 10, padding: 10, backgroundColor: '#f8faff', borderRadius: 8, borderWidth: 0.5, borderColor: '#e2eaf4' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#1a2744', marginBottom: 6 }}>{selectedCrewDate}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                    {dayUsers.map(u => {
+                      const st = STATUS_OPTIONS.find(o => o.value === u.status) || STATUS_OPTIONS[0];
+                      return (
+                        <View key={u.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: st.bg, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: st.color }}>{u.initial}</Text>
+                          {u.status !== 'active' && <Text style={{ fontSize: 9, color: st.color }}>{st.label}</Text>}
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <TouchableOpacity style={{ marginTop: 8, alignItems: 'center' }} onPress={() => setCrewCalModal(false)}>
+                    <Text style={{ fontSize: 12, color: '#1a2744', fontWeight: '600' }}>Bu tarihe git →</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, justifyContent: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#ef4444' }} /><Text style={{ fontSize: 10, color: '#64748b' }}>Gündüz</Text></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3b82f6' }} /><Text style={{ fontSize: 10, color: '#64748b' }}>Gece</Text></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22c55e' }} /><Text style={{ fontSize: 10, color: '#64748b' }}>Off</Text></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#f59e0b' }} /><Text style={{ fontSize: 10, color: '#64748b' }}>İzin var</Text></View>
+            </View>
+
+            <TouchableOpacity style={{ marginTop: 12, padding: 10, alignItems: 'center' }} onPress={() => setCrewCalModal(false)}>
+              <Text style={{ color: '#64748b', fontSize: 13 }}>Kapat</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!statusModalUser} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: (statusModalUser?.color_hex || '#94a3b8') + '33', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: statusModalUser?.color_hex || '#94a3b8' }}>{statusModalUser?.initial}</Text>
+              </View>
+              <Text style={styles.modalTitle}>{statusModalUser?.full_name}</Text>
+            </View>
+
+            <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '500', marginBottom: 8 }}>İzin türü</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {STATUS_OPTIONS.filter(o => o.value !== 'hourly_leave').map(opt => (
+                  <TouchableOpacity key={opt.value}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: selectedStatus === opt.value ? 2 : 0.5, borderColor: selectedStatus === opt.value ? opt.color : '#e2e8f0', backgroundColor: selectedStatus === opt.value ? opt.bg : 'transparent' }}
+                    onPress={() => setSelectedStatus(opt.value)}>
+                    <Text style={{ fontSize: 12, fontWeight: '500', color: selectedStatus === opt.value ? opt.color : '#64748b' }}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <TouchableOpacity onPress={() => { const m = calMonth === 0 ? 11 : calMonth-1; setCalMonth(m); if (m === 11) setCalYear(y => y-1); }}>
+                <Text style={{ fontSize: 18, color: '#1a2744' }}>‹</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 13, fontWeight: '500', color: '#1a2744' }}>
+                {['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'][calMonth]} {calYear}
+              </Text>
+              <TouchableOpacity onPress={() => { const m = calMonth === 11 ? 0 : calMonth+1; setCalMonth(m); if (m === 0) setCalYear(y => y+1); }}>
+                <Text style={{ fontSize: 18, color: '#1a2744' }}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+              {['Pt','Sa','Ça','Pe','Cu','Ct','Pz'].map(d => (
+                <Text key={d} style={{ flex: 1, textAlign: 'center', fontSize: 10, color: '#94a3b8', fontWeight: '500' }}>{d}</Text>
+              ))}
+            </View>
+
+            {(() => {
+              const firstDow = (new Date(calYear, calMonth, 1).getDay() + 6) % 7;
+              const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+              const cells = [];
+              for (let i = 0; i < firstDow; i++) cells.push(null);
+              for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+              while (cells.length % 7 !== 0) cells.push(null);
+              const rows = [];
+              for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i+7));
+              return rows.map((row, ri) => (
+                <View key={ri} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                  {row.map((day, ci) => {
+                    if (!day) return <View key={ci} style={{ flex: 1, height: 30 }} />;
+                    const ds = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const shift = getShiftType(ds);
+                    const inRange = statusStartDate && statusEndDate && ds >= statusStartDate && ds <= statusEndDate;
+                    const isStart = ds === statusStartDate;
+                    const isEnd = ds === statusEndDate;
+                    const shiftBg = shift === 'day' ? '#fef2f2' : shift === 'night' ? '#eff6ff' : shift === 'off' ? '#f0fdf4' : 'transparent';
+                    const shiftDot = shift === 'day' ? '#ef4444' : shift === 'night' ? '#3b82f6' : shift === 'off' ? '#22c55e' : null;
+                    return (
+                      <TouchableOpacity key={ci} style={{ flex: 1, height: 30, borderRadius: 6, margin: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: isStart || isEnd ? '#1a2744' : inRange ? '#bfdbfe' : shiftBg }}
+                        onPress={() => {
+                          if (!statusStartDate || (statusStartDate && statusEndDate)) {
+                            setStatusStartDate(ds); setStatusEndDate('');
+                          } else {
+                            if (ds >= statusStartDate) setStatusEndDate(ds);
+                            else { setStatusStartDate(ds); setStatusEndDate(''); }
+                          }
+                        }}>
+                        <Text style={{ fontSize: 11, fontWeight: isStart || isEnd ? '700' : '400', color: isStart || isEnd ? '#fff' : inRange ? '#1e40af' : '#1a2744' }}>{day}</Text>
+                        {shiftDot && !inRange && !isStart && !isEnd && <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: shiftDot }} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ));
+            })()}
+
+            {statusStartDate ? (
+              <Text style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 8 }}>
+                {statusStartDate}{statusEndDate && statusEndDate !== statusStartDate ? ` – ${statusEndDate}` : ''}
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', marginTop: 8 }}>Başlangıç tarihine tıkla</Text>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+              <TouchableOpacity style={{ flex: 1, padding: 11, borderRadius: 8, borderWidth: 0.5, borderColor: '#e2e8f0', alignItems: 'center' }} onPress={() => setStatusModalUser(null)}>
+                <Text style={{ fontSize: 13, color: '#64748b' }}>Kapat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 2, padding: 11, borderRadius: 8, backgroundColor: '#1a2744', alignItems: 'center' }}
+                onPress={async () => {
+                  if (!statusStartDate) return;
+                  const start = new Date(statusStartDate);
+                  const end = new Date(statusEndDate || statusStartDate);
+                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    const ds = d.toISOString().split('T')[0];
+                    await setUserStatus(statusModalUser.id, selectedStatus, null, ds);
+                  }
+                  setStatusModalUser(null);
+                }}>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff' }}>Kaydet</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
