@@ -522,7 +522,7 @@ export default function ScheduleScreen({ user }) {
             <Text style={styles.headerSub}>{airport ? `${airport.icao_code} · ${airport.unit_name}` : ''}</Text>
           </View>
           {isChief && (
-            <TouchableOpacity style={styles.createBtn} onPress={() => setCreateModal(true)}>
+            <TouchableOpacity style={styles.createBtn} onPress={() => { setNewDate(selectedDate); setCreateModal(true); }}>
               <Text style={styles.createBtnText}>+ Program</Text>
             </TouchableOpacity>
           )}
@@ -569,7 +569,7 @@ export default function ScheduleScreen({ user }) {
         <View style={styles.center}>
           <Text style={styles.emptyText}>Program yok</Text>
           {isChief && (
-            <TouchableOpacity style={styles.createBtnLarge} onPress={() => setCreateModal(true)}>
+            <TouchableOpacity style={styles.createBtnLarge} onPress={() => { setNewDate(selectedDate); setCreateModal(true); }}>
               <Text style={styles.createBtnLargeText}>+ Yeni Program Olustur</Text>
             </TouchableOpacity>
           )}
