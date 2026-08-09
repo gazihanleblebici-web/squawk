@@ -31,6 +31,7 @@ export default function CrewScreen({ user }) {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [statusModalUser, setStatusModalUser] = useState(null);
   const [statusStartDate, setStatusStartDate] = useState('');
+  const [userStatusDates, setUserStatusDates] = useState([]);
   const [statusEndDate, setStatusEndDate] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('annual_leave');
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -327,7 +328,7 @@ const isChief = user?.role === 'chief';
 
               <TouchableOpacity
                 style={[styles.statusChip, { backgroundColor: statusInfo.bg, borderColor: statusInfo.color }]}
-                onPress={() => setStatusModalUser(item)}
+                onPress={() => { const d = new Date(); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); setUserStatusDates([]); setStatusStartDate(''); setStatusEndDate(''); supabase.from('user_day_status').select('status_date,status').eq('user_id', item.id).then(({ data }) => { if (data) setUserStatusDates(data); }); setStatusModalUser(item); }}
               >
                 <Text style={[styles.statusChipText, { color: statusInfo.color }]}>
                   {statusInfo.label}
@@ -630,15 +631,27 @@ const isChief = user?.role === 'chief';
                     if (!day) return <View key={ci} style={{ flex: 1, height: 30 }} />;
                     const ds = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                     const shift = getShiftType(ds);
+                    const userStatus = userStatusDates.find(s => s.status_date === ds);
+                    const userStatusColor = userStatus ? ({
+                      annual_leave: '#3b82f6',
+                      excuse_leave: '#9333ea',
+                      sick: '#ef4444',
+                      domestic_duty: '#0891b2',
+                      abroad_duty: '#d97706',
+                      hourly_leave: '#f59e0b',
+                    }[userStatus.status] || null) : null;
                     const inRange = statusStartDate && statusEndDate && ds >= statusStartDate && ds <= statusEndDate;
                     const isStart = ds === statusStartDate;
                     const isEnd = ds === statusEndDate;
                     const shiftBg = shift === 'day' ? '#fef2f2' : shift === 'night' ? '#eff6ff' : shift === 'off' ? '#f0fdf4' : 'transparent';
                     const shiftDot = shift === 'day' ? '#ef4444' : shift === 'night' ? '#3b82f6' : shift === 'off' ? '#22c55e' : null;
+                    const isTodayCell = ds === today;
                     return (
-                      <TouchableOpacity key={ci} style={{ flex: 1, height: 30, borderRadius: 6, margin: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: isStart || isEnd ? '#1a2744' : inRange ? '#bfdbfe' : shiftBg }}
+                      <TouchableOpacity key={ci} style={{ flex: 1, height: 30, borderRadius: 6, margin: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: isStart || isEnd ? '#1a2744' : inRange ? '#bfdbfe' : userStatusColor ? userStatusColor + '33' : shiftBg, borderWidth: isTodayCell ? 1.5 : userStatusColor && !inRange && !isStart && !isEnd ? 1.5 : 0, borderColor: isTodayCell ? '#1a2744' : userStatusColor || '#1a2744' }}
                         onPress={() => {
-                          if (!statusStartDate || (statusStartDate && statusEndDate)) {
+                          if (ds === statusStartDate && !statusEndDate) {
+                            setStatusStartDate(''); setStatusEndDate('');
+                          } else if (!statusStartDate || (statusStartDate && statusEndDate)) {
                             setStatusStartDate(ds); setStatusEndDate('');
                           } else {
                             if (ds >= statusStartDate) setStatusEndDate(ds);
@@ -646,7 +659,11 @@ const isChief = user?.role === 'chief';
                           }
                         }}>
                         <Text style={{ fontSize: 11, fontWeight: isStart || isEnd ? '700' : '400', color: isStart || isEnd ? '#fff' : inRange ? '#1e40af' : '#1a2744' }}>{day}</Text>
-                        {shiftDot && !inRange && !isStart && !isEnd && <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: shiftDot }} />}
+                        {shiftDot && !inRange && !isStart && !isEnd && !userStatusColor && <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: shiftDot }} />}
+                        {userStatusColor && !isStart && !isEnd && !inRange && (() => {
+                          const label = { annual_leave: 'Y.İ', excuse_leave: 'M.İ', sick: 'Rpr', domestic_duty: 'Y.İç', abroad_duty: 'Y.Dş', hourly_leave: 'Saat' }[userStatus?.status] || '';
+                          return label ? <Text style={{ fontSize: 6, color: userStatusColor, fontWeight: '700', position: 'absolute', bottom: 1, left: 2 }}>{label}</Text> : null;
+                        })()}
                       </TouchableOpacity>
                     );
                   })}

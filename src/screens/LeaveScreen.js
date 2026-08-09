@@ -51,6 +51,8 @@ export default function LeaveScreen({ user }) {
   const [shiftStartType, setShiftStartType] = useState('day');
 
   const isChief = user?.role === 'chief';
+  const [crewUsers, setCrewUsers] = useState([]);
+  const [dayStatusData, setDayStatusData] = useState([]);
 
   useEffect(() => {
     fetchAll();
@@ -61,6 +63,13 @@ export default function LeaveScreen({ user }) {
   useFocusEffect(useCallback(() => {
     fetchShiftInfo();
   }, []));
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    supabase.from('user_day_status').select('user_id,status').eq('status_date', selectedDate).then(({ data }) => {
+      if (data) setDayStatusData(data);
+    });
+  }, [selectedDate]);
 
   async function fetchShiftInfo() {
     const chiefId = await getChiefId();
@@ -96,6 +105,8 @@ export default function LeaveScreen({ user }) {
 
   async function fetchAll() {
     setLoading(true);
+    const { data: usersData } = await supabase.from('users').select('*').eq('is_active', true).order('display_order', { ascending: true });
+    if (usersData) setCrewUsers(usersData);
     if (isChief) {
       const { data } = await supabase
         .from('leave_requests')
@@ -135,8 +146,8 @@ export default function LeaveScreen({ user }) {
   }
 
   function getLeavesForDate(dateString) {
-    if (isChief) return allLeaves.filter(l => l.start_date <= dateString && l.end_date >= dateString);
-    return leaves.filter(l => l.start_date <= dateString && l.end_date >= dateString);
+    if (isChief) return allLeaves.filter(l => l.start_date <= dateString && l.end_date >= dateString && !['rejected','cancelled'].includes(l.status));
+    return leaves.filter(l => l.start_date <= dateString && l.end_date >= dateString && !['rejected','cancelled'].includes(l.status));
   }
 
   async function getChiefId() {
@@ -281,7 +292,7 @@ export default function LeaveScreen({ user }) {
       else if (shiftType === 'off') cellStyle.push({ backgroundColor: '#f0fdf4', borderColor: '#86efac', borderWidth: 1 });
     }
     return (
-      <TouchableOpacity key={day} style={cellStyle} onPress={() => { setSelectedDate(ds); setDayModal(true); }}>
+      <TouchableOpacity key={day} style={cellStyle} onPress={() => { setSelectedDate(ds); }}>
         <Text style={textStyle}>{day}</Text>
         {shiftType && !mainLeave && (
           <Text style={{ fontSize: 7, color: shiftType === 'day' ? '#dc2626' : shiftType === 'night' ? '#2563eb' : '#16a34a', fontWeight: '600' }}>
@@ -361,6 +372,51 @@ export default function LeaveScreen({ user }) {
           <View style={styles.legendItem}><Text style={styles.legendText}>✅ Onaylandı</Text></View>
           <View style={styles.legendItem}><Text style={styles.legendText}>🚫 İptal Talebi</Text></View>
         </View>
+
+        {selectedDate && (
+          <View style={{ margin: 12, backgroundColor: '#f8faff', borderRadius: 12, borderWidth: 0.5, borderColor: '#e2eaf4', overflow: 'hidden' }}>
+            <View style={{ backgroundColor: '#1a2744', padding: 10 }}>
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' })}
+              </Text>
+            </View>
+            {isChief ? (
+              crewUsers.map(u => {
+                const st = dayStatusData.find(s => s.user_id === u.id);
+                const status = st?.status || 'active';
+                const statusInfo = { active: { label: 'Mevcut', color: '#166534', bg: '#dcfce7' }, annual_leave: { label: 'Yıllık İzin', color: '#1e40af', bg: '#dbeafe' }, excuse_leave: { label: 'Mazeret', color: '#7e22ce', bg: '#faf5ff' }, sick: { label: 'Raporlu', color: '#dc2626', bg: '#fee2e2' }, domestic_duty: { label: 'Yurt İçi Görev', color: '#0891b2', bg: '#ecfeff' }, abroad_duty: { label: 'Yurt Dışı Görev', color: '#d97706', bg: '#fffbeb' }, hourly_leave: { label: 'Saatlik İzin', color: '#d97706', bg: '#fffbeb' } }[status] || { label: status, color: '#64748b', bg: '#f1f5f9' };
+                return (
+                  <View key={u.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#e2eaf4' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: (u.color_hex || '#94a3b8') + '33', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: u.color_hex || '#94a3b8' }}>{u.initial}</Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#1a2744' }}>{u.full_name}</Text>
+                    </View>
+                    <View style={{ backgroundColor: statusInfo.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                      <Text style={{ fontSize: 10, color: statusInfo.color, fontWeight: '500' }}>{statusInfo.label}</Text>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={{ padding: 12 }}>
+                {getLeavesForDate(selectedDate).filter(l => l.user_id === user?.id).length > 0
+                  ? getLeavesForDate(selectedDate).filter(l => l.user_id === user?.id).map(l => (
+                    <Text key={l.id} style={{ fontSize: 12, color: '#1a2744', marginBottom: 4 }}>
+                      {({ annual_leave: 'Yıllık İzin', excuse_leave: 'Mazeret', sick: 'Raporlu', domestic_duty: 'Yurt İçi Görev', abroad_duty: 'Yurt Dışı Görev' }[l.leave_type] || l.leave_type)} — {l.status === 'pending' ? '⏳ Bekliyor' : '✅ Onaylandı'}
+                    </Text>
+                  ))
+                  : <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Bu gün için izin talebiniz yok.</Text>
+                }
+                <TouchableOpacity style={{ marginTop: 8, padding: 10, alignItems: 'center', backgroundColor: '#eff6ff', borderRadius: 8 }} onPress={() => setLeaveTypeModal(true)}>
+                  <Text style={{ fontSize: 12, color: '#1e40af', fontWeight: '600' }}>+ İzin Talebi Gönder</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
       </ScrollView>
 
       <Modal visible={dayModal} transparent animationType="slide">
