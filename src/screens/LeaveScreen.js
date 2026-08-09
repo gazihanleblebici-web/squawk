@@ -292,7 +292,7 @@ export default function LeaveScreen({ user }) {
       else if (shiftType === 'off') cellStyle.push({ backgroundColor: '#f0fdf4', borderColor: '#86efac', borderWidth: 1 });
     }
     return (
-      <TouchableOpacity key={day} style={cellStyle} onPress={() => { setSelectedDate(ds); if (isChief) setDayModal(true); }}>
+      <TouchableOpacity key={day} style={cellStyle} onPress={() => { setSelectedDate(ds); setDayModal(true); }}>
         <Text style={textStyle}>{day}</Text>
         {shiftType && !mainLeave && (
           <Text style={{ fontSize: 7, color: shiftType === 'day' ? '#dc2626' : shiftType === 'night' ? '#2563eb' : '#16a34a', fontWeight: '600' }}>
