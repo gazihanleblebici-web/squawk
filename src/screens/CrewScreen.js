@@ -138,11 +138,7 @@ const isChief = user?.role === 'chief';
       payload.hourly_leave_end = null;
     }
 
-    if (existing) {
-      await supabase.from('user_day_status').update(payload).eq('id', existing.id);
-    } else {
-      await supabase.from('user_day_status').insert(payload);
-    }
+    await supabase.from('user_day_status').upsert(payload, { onConflict: 'user_id,status_date' });
 
     setStatusModalUser(null);
     fetchAll();
@@ -294,6 +290,8 @@ const isChief = user?.role === 'chief';
             const d = new Date(selectedCrewDate);
             setCrewCalYear(d.getFullYear());
             setCrewCalMonth(d.getMonth());
+            fetchMonthStatus(d.getFullYear(), d.getMonth());
+            setMonthStatusData([]);
             fetchMonthStatus(d.getFullYear(), d.getMonth());
             setCrewCalModal(true);
           }}>
@@ -535,7 +533,8 @@ const isChief = user?.role === 'chief';
             })()}
 
             {selectedCrewDate && (() => {
-              const dayData = monthStatusData.filter(s => s.status_date === selectedCrewDate);
+              const calDate = selectedCrewDate;
+              const dayData = monthStatusData.filter(s => s.status_date === calDate);
               const dayUsers = users.map(u => {
                 const st = dayData.find(s => s.user_id === u.id);
                 return { ...u, status: st?.status || 'active' };
@@ -677,6 +676,7 @@ const isChief = user?.role === 'chief';
                     await setUserStatus(statusModalUser.id, selectedStatus, null, ds);
                   }
                   setStatusModalUser(null);
+                  fetchMonthStatus(crewCalYear, crewCalMonth);
                 }}>
                 <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff' }}>Kaydet</Text>
               </TouchableOpacity>
