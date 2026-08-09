@@ -70,6 +70,8 @@ export default function ScheduleScreen({ user }) {
   const todayStr = todayDate.toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [calendarModal, setCalendarModal] = useState(false);
+  const [shiftStartDate, setShiftStartDate] = useState(null);
+  const [shiftStartType, setShiftStartType] = useState('day');
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [monthSchedules, setMonthSchedules] = useState([]);
@@ -90,6 +92,15 @@ export default function ScheduleScreen({ user }) {
     if (data) setMonthSchedules(data);
   }
 
+  function getShiftType(ds) {
+    if (!shiftStartDate) return null;
+    const diff = Math.round((new Date(ds) - new Date(shiftStartDate)) / 86400000);
+    if (diff < 0) return null;
+    const cycle = diff % 5;
+    if (shiftStartType === 'day') return cycle === 0 ? 'day' : cycle === 1 ? 'night' : 'off';
+    return cycle === 0 ? 'night' : cycle <= 3 ? 'off' : 'day';
+  }
+
   async function loadSchedule() {
     if (!scheduleInfo?.id) return;
     const { data: bds } = await supabase
@@ -104,6 +115,8 @@ export default function ScheduleScreen({ user }) {
 
     const { data: usersData } = await supabase.from('users').select('*').eq('is_active', true);
     if (usersData) setAllUsers(usersData);
+    const { data: chiefData } = await supabase.from('users').select('shift_start_date,shift_start_type').eq('role', 'chief').limit(1).maybeSingle();
+    if (chiefData) { setShiftStartDate(chiefData.shift_start_date); setShiftStartType(chiefData.shift_start_type || 'day'); }
     const { data: pairsData } = await supabase.from('ojti_pairs').select('*').eq('is_active', true);
     if (pairsData) setOjtiPairs(pairsData);
 
@@ -847,8 +860,10 @@ export default function ScheduleScreen({ user }) {
                     const hasNight = sch.some(s => s.shift_template_id === 'ecd9ef04-2408-439f-b729-62d93977cf53');
                     const isSelected = ds === selectedDate;
                     const isToday = ds === todayStr;
+                    const shift = getShiftType(ds);
+                    const shiftBg = shift === 'day' ? '#fef2f2' : shift === 'night' ? '#eff6ff' : shift === 'off' ? '#f0fdf4' : 'transparent';
                     return (
-                      <TouchableOpacity key={ci} style={{ flex: 1, height: 34, borderRadius: 6, margin: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? '#1a2744' : hasDay && hasNight ? '#7c3aed22' : hasDay ? '#ef444422' : hasNight ? '#3b82f622' : 'transparent', borderWidth: isToday ? 1.5 : 0, borderColor: '#1a2744' }}
+                      <TouchableOpacity key={ci} style={{ flex: 1, height: 34, borderRadius: 6, margin: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? '#1a2744' : shiftBg, borderWidth: isToday ? 1.5 : 0, borderColor: '#1a2744' }}
                         onPress={() => { setSelectedDate(ds); setCalendarModal(false); }}>
                         <Text style={{ fontSize: 12, fontWeight: isSelected || isToday ? '700' : '400', color: isSelected ? '#fff' : isToday ? '#1a2744' : '#1a2744' }}>{day}</Text>
                         <View style={{ flexDirection: 'row', gap: 2 }}>
