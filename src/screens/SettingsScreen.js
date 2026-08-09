@@ -257,6 +257,36 @@ export default function SettingsScreen({ user, onLogout }) {
     );
   }
 
+  if (user?.role !== 'chief') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Ayarlar</Text>
+          <Text style={styles.headerSub}>{user?.full_name}</Text>
+        </View>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
+          <View style={styles.airportCard}>
+            <Text style={{ fontSize: 13, color: '#64748b' }}>Ad Soyad</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#1a2744', marginTop: 2 }}>{user?.full_name}</Text>
+          </View>
+          <View style={[styles.airportCard, { marginTop: 8 }]}>
+            <Text style={{ fontSize: 13, color: '#64748b' }}>Sicil No</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#1a2744', marginTop: 2 }}>{user?.sicil_no || '-'}</Text>
+          </View>
+          <View style={[styles.airportCard, { marginTop: 8 }]}>
+            <Text style={{ fontSize: 13, color: '#64748b' }}>Tip</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#1a2744', marginTop: 2 }}>{user?.is_ojti ? 'Asistan ATC' : user?.day_only ? "Rate'li ATC (Sadece Gündüz)" : "Rate'li ATC"}</Text>
+          </View>
+          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Oturum</Text>
+          <TouchableOpacity style={[styles.airportCard, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]} onPress={onLogout}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#dc2626' }}>Çıkış Yap</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
