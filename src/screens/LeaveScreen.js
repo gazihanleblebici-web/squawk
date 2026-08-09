@@ -292,7 +292,7 @@ export default function LeaveScreen({ user }) {
       else if (shiftType === 'off') cellStyle.push({ backgroundColor: '#f0fdf4', borderColor: '#86efac', borderWidth: 1 });
     }
     return (
-      <TouchableOpacity key={day} style={cellStyle} onPress={() => { setSelectedDate(ds); }}>
+      <TouchableOpacity key={day} style={cellStyle} onPress={() => { setSelectedDate(ds); if (isChief) setDayModal(true); }}>
         <Text style={textStyle}>{day}</Text>
         {shiftType && !mainLeave && (
           <Text style={{ fontSize: 7, color: shiftType === 'day' ? '#dc2626' : shiftType === 'night' ? '#2563eb' : '#16a34a', fontWeight: '600' }}>
@@ -456,6 +456,16 @@ export default function LeaveScreen({ user }) {
                       <TouchableOpacity style={styles.cancelLeaveBtn} onPress={() => cancelLeave(leave)}>
                         <Text style={styles.cancelLeaveBtnText}>{leave.status === 'pending' ? 'Talebi Geri Al' : 'İptal Talebi Gönder'}</Text>
                       </TouchableOpacity>
+                    )}
+                    {isChief && (leave.status === 'pending' || leave.status === 'cancel_pending') && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                        <TouchableOpacity style={[styles.cancelLeaveBtn, { flex: 1, backgroundColor: '#dcfce7', borderColor: '#166534' }]} onPress={() => leave.status === 'cancel_pending' ? approveCancelLeave(leave) : approveLeave(leave)}>
+                          <Text style={[styles.cancelLeaveBtnText, { color: '#166534' }]}>✅ Onayla</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.cancelLeaveBtn, { flex: 1, backgroundColor: '#fee2e2', borderColor: '#dc2626' }]} onPress={() => rejectLeave(leave)}>
+                          <Text style={[styles.cancelLeaveBtnText, { color: '#dc2626' }]}>❌ Reddet</Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
                     {isChief && leave.status === 'approved' && (
                       <TouchableOpacity style={[styles.cancelLeaveBtn, { borderColor: '#dc2626' }]} onPress={() => chiefCancelLeave(leave)}>

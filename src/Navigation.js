@@ -91,6 +91,7 @@ export default function Navigation({ user, onLogout }) {
           options={{
             tabBarLabel: 'Ajanda',
             tabBarIcon: ({ color, size }) => <TabIcon name="calendar" color={color} size={size} />,
+            headerShown: false,
           }}
         >
           {() => <LeaveScreen user={user} />}
