@@ -316,7 +316,7 @@ const isChief = user?.role === 'chief';
 
           return (
             <View key={item.id} style={styles.row}>
-              <TouchableOpacity style={styles.rowMain} onPress={() => openEditModal(item)}>
+              <TouchableOpacity style={styles.rowMain} onPress={isChief ? () => openEditModal(item) : null} disabled={!isChief}>
                 <View style={[styles.badge, { backgroundColor: item.color_hex }]}>
                   <Text style={styles.badgeText}>{item.initial}</Text>
                 </View>
@@ -328,7 +328,8 @@ const isChief = user?.role === 'chief';
 
               <TouchableOpacity
                 style={[styles.statusChip, { backgroundColor: statusInfo.bg, borderColor: statusInfo.color }]}
-                onPress={() => { const d = new Date(); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); setUserStatusDates([]); setStatusStartDate(''); setStatusEndDate(''); supabase.from('user_day_status').select('status_date,status').eq('user_id', item.id).then(({ data }) => { if (data) setUserStatusDates(data); }); setStatusModalUser(item); }}
+                onPress={isChief ? () => { const d = new Date(); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); setUserStatusDates([]); setStatusStartDate(''); setStatusEndDate(''); supabase.from('user_day_status').select('status_date,status').eq('user_id', item.id).then(({ data }) => { if (data) setUserStatusDates(data); }); setStatusModalUser(item); } : null}
+                disabled={!isChief}
               >
                 <Text style={[styles.statusChipText, { color: statusInfo.color }]}>
                   {statusInfo.label}
