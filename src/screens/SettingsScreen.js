@@ -23,6 +23,10 @@ export default function SettingsScreen({ user, onLogout }) {
   const [airportModal, setAirportModal] = useState(false);
   const [blockModal, setBlockModal] = useState(false);
   const [createShiftModal, setCreateShiftModal] = useState(false);
+  const [passwordModal, setPasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordMsg, setPasswordMsg] = useState('');
   const [editingBlock, setEditingBlock] = useState(null);
   const [newShiftType, setNewShiftType] = useState('day');
   const [newShiftStart, setNewShiftStart] = useState('06:00');
@@ -40,6 +44,16 @@ export default function SettingsScreen({ user, onLogout }) {
       setShiftStartType(user.shift_start_type || 'day');
     }
   }, []);
+
+  async function changePassword() {
+    if (!oldPassword || !newPassword) { setPasswordMsg('Tüm alanları doldurun.'); return; }
+    const { data: u } = await supabase.from('users').select('password').eq('id', user?.id).single();
+    if (u?.password !== oldPassword) { setPasswordMsg('Mevcut şifre yanlış.'); return; }
+    await supabase.from('users').update({ password: newPassword }).eq('id', user?.id);
+    setPasswordMsg('Şifre güncellendi!');
+    setOldPassword(''); setNewPassword('');
+    setTimeout(() => { setPasswordModal(false); setPasswordMsg(''); }, 1500);
+  }
 
   async function fetchData() {
     setLoading(true);
@@ -278,10 +292,34 @@ export default function SettingsScreen({ user, onLogout }) {
             <Text style={{ fontSize: 13, color: '#64748b' }}>Tip</Text>
             <Text style={{ fontSize: 15, fontWeight: '600', color: '#1a2744', marginTop: 2 }}>{user?.is_ojti ? 'Asistan ATC' : user?.day_only ? "Rate'li ATC (Sadece Gündüz)" : "Rate'li ATC"}</Text>
           </View>
-          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Oturum</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Güvenlik</Text>
+          <TouchableOpacity style={[styles.airportCard, { marginBottom: 8 }]} onPress={() => setPasswordModal(true)}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#1a2744' }}>🔑 Şifre Değiştir</Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Oturum</Text>
           <TouchableOpacity style={[styles.airportCard, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]} onPress={onLogout}>
             <Text style={{ fontSize: 15, fontWeight: '600', color: '#dc2626' }}>Çıkış Yap</Text>
           </TouchableOpacity>
+
+          <Modal visible={passwordModal} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Şifre Değiştir</Text>
+                <TextInput style={styles.input} placeholder="Mevcut şifre" secureTextEntry value={oldPassword} onChangeText={setOldPassword} />
+                <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="Yeni şifre" secureTextEntry value={newPassword} onChangeText={setNewPassword} />
+                {passwordMsg ? <Text style={{ fontSize: 13, color: passwordMsg.includes('!') ? '#166534' : '#dc2626', marginTop: 8 }}>{passwordMsg}</Text> : null}
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+                  <TouchableOpacity style={[styles.cancelBtn, { flex: 1 }]} onPress={() => { setPasswordModal(false); setOldPassword(''); setNewPassword(''); setPasswordMsg(''); }}>
+                    <Text style={styles.cancelBtnText}>Vazgeç</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.saveBtn, { flex: 1 }]} onPress={changePassword}>
+                    <Text style={styles.saveBtnText}>Kaydet</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </ScrollView>
       </View>
     );
