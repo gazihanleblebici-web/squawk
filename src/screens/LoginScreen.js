@@ -79,26 +79,33 @@ export default function LoginScreen({ onLogin }) {
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-          <Text style={styles.logo}>✈ SQUAWK</Text>
-          <Text style={styles.sub}>ATC Scheduler</Text>
+          <View style={{ alignItems: 'center', marginBottom: 32 }}>
+            <View style={{ width: 280, height: 60 }}>
+              <Text style={{ color: '#fff', fontSize: 26, fontWeight: '500', letterSpacing: 3, textAlign: 'center' }}>SQUAWK</Text>
+              <Text style={{ color: '#3b82f6', fontSize: 9, letterSpacing: 5, textAlign: 'center', marginTop: 2 }}>A L P H A</Text>
+            </View>
+            <Text style={styles.sub}>ATC EKİP YÖNETİM MERKEZİ</Text>
+          </View>
 
           <View style={styles.form}>
-            <Text style={styles.label}>Sicil Numarasi</Text>
+            <Text style={styles.formTitle}>OTURUM AÇ</Text>
+
+            <Text style={styles.label}>SİCİL NO</Text>
             <TextInput
               style={styles.input}
-              placeholder="Sicil No"
-              placeholderTextColor="#4a6080"
+              placeholder="001"
+              placeholderTextColor="#334155"
               value={sicil}
               onChangeText={setSicil}
               keyboardType="numeric"
               autoCapitalize="none"
             />
 
-            <Text style={styles.label}>Sifre</Text>
+            <Text style={[styles.label, { marginTop: 14 }]}>ŞİFRE</Text>
             <TextInput
               style={styles.input}
-              placeholder="Sifre"
-              placeholderTextColor="#4a6080"
+              placeholder="••••••"
+              placeholderTextColor="#334155"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -108,11 +115,13 @@ export default function LoginScreen({ onLogin }) {
 
             <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
               {loading
-                ? <ActivityIndicator color="#1a2744" />
-                : <Text style={styles.buttonText}>Giris Yap</Text>
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.buttonText}>GİRİŞ YAP</Text>
               }
             </TouchableOpacity>
           </View>
+
+          <Text style={{ color: '#1e3a5f', fontSize: 11, marginTop: 24, letterSpacing: 1 }}>Antalya Yaklaşma Kontrol · v1.0 Alpha</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -237,19 +246,19 @@ export default function LoginScreen({ onLogin }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a2744' },
+  container: { flex: 1, backgroundColor: '#0f172a' },
   inner: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 24, paddingBottom: 48 },
   logo: { fontSize: 42, fontWeight: '800', color: '#ffffff', letterSpacing: 4 },
-  sub: { fontSize: 16, color: '#60a5fa', marginTop: 6, fontWeight: '600', marginBottom: 32 },
-  form: { width: '100%', maxWidth: 380 },
-  formTitle: { fontSize: 18, fontWeight: '800', color: '#ffffff', marginBottom: 4 },
+  sub: { fontSize: 10, color: '#334155', marginTop: 4, fontWeight: '500', marginBottom: 32, letterSpacing: 2 },
+  form: { width: '100%', maxWidth: 360, backgroundColor: '#0f2040', borderWidth: 0.5, borderColor: '#1e3a5f', borderRadius: 16, padding: 24 },
+  formTitle: { fontSize: 11, fontWeight: '500', color: '#64748b', marginBottom: 20, textAlign: 'center', letterSpacing: 1 },
   formSub: { fontSize: 12, color: '#64748b', marginBottom: 20 },
-  label: { color: '#93c5fd', fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 16 },
-  input: { backgroundColor: '#0f1e35', borderWidth: 1, borderColor: '#1e3a5f', borderRadius: 10, padding: 14, color: '#ffffff', fontSize: 15 },
+  label: { color: '#64748b', fontSize: 11, fontWeight: '500', marginBottom: 6, marginTop: 0, letterSpacing: 1 },
+  input: { backgroundColor: '#0a1628', borderWidth: 0.5, borderColor: '#1e3a5f', borderRadius: 8, padding: 12, paddingLeft: 36, color: '#ffffff', fontSize: 14 },
   error: { color: '#f87171', fontSize: 13, marginTop: 12, textAlign: 'center' },
-  button: { backgroundColor: '#f59e0b', borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 24 },
+  button: { backgroundColor: '#2563eb', borderRadius: 8, padding: 13, alignItems: 'center', marginTop: 20 },
   buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: '#1a2744', fontSize: 16, fontWeight: '800' },
+  buttonText: { color: '#ffffff', fontSize: 14, fontWeight: '500', letterSpacing: 1 },
   stepIndicator: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   stepDot: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0f1e35', borderWidth: 2, borderColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' },
   stepDotActive: { backgroundColor: '#f59e0b', borderColor: '#f59e0b' },
