@@ -433,8 +433,13 @@ export default function ScheduleScreen({ user }) {
     const startMin = timeToMinutes(block.start_zulu);
     const endMin = timeToMinutes(block.end_zulu === '00:00:00' ? '06:00:00' : block.end_zulu);
     const totalMin = endMin - startMin;
-    const PX_PER_MIN = 2.2;
-    const timelineHeight = totalMin * PX_PER_MIN + 40;
+    const PX_PER_MIN = 1.6;
+    // Son boardun alt sinirini hesapla
+    const maxBoardEnd = blockBoards.reduce((max, b) => {
+      const bEnd = timeToMinutes(b.end_zulu === '00:00:00' ? '06:00:00' : b.end_zulu);
+      return Math.max(max, bEnd);
+    }, endMin);
+    const timelineHeight = Math.max(totalMin, maxBoardEnd - startMin) * PX_PER_MIN + 150;
 
     const hourMarks = [];
     const markCount = Math.ceil(totalMin / 30);
@@ -447,7 +452,7 @@ export default function ScheduleScreen({ user }) {
 
     return (
       <ScrollView horizontal>
-        <View style={styles.offsetTimelineWrap}>
+        <View style={[styles.offsetTimelineWrap, { minHeight: timelineHeight + 200 }]}>
           <View style={[styles.offsetTimeAxis, { height: timelineHeight + 36 }]}>
             <View style={styles.offsetTimeAxisSpacer} />
             {hourMarks.map(label => {
@@ -464,20 +469,31 @@ export default function ScheduleScreen({ user }) {
               <View style={styles.offsetColumnHeader}>
                 <Text style={styles.offsetColumnHeaderText}>{pos}</Text>
               </View>
-              <View style={[styles.offsetColumnBody, { height: timelineHeight }]}>
+              {(() => {
+                const colBoards = blockBoards.filter(b => b.positions?.code === pos);
+                const maxBottom = colBoards.reduce((max, b) => {
+                  const bStart = timeToMinutes(b.start_zulu);
+                  const bEnd = timeToMinutes(b.end_zulu === '00:00:00' ? '06:00:00' : b.end_zulu);
+                  const top = (bStart - startMin) * PX_PER_MIN;
+                  const h = Math.max((bEnd - bStart) * PX_PER_MIN, b.ojti ? 64 : 48);
+                  return Math.max(max, top + h);
+                }, timelineHeight);
+                return <View style={[styles.offsetColumnBody, { height: maxBottom + 20 }]}>
                 {hourMarks.map(label => (
                   <View key={label} style={[styles.offsetGridLine, { top: (timeToMinutes(label + ':00') - startMin) * PX_PER_MIN }]} />
                 ))}
                 {blockBoards
                   .filter(b => b.positions?.code === pos)
                   .sort((a, b) => a.start_zulu.localeCompare(b.start_zulu))
-                  .map(board => {
+                  .map((board, boardIdx, arr) => {
                     const bStart = timeToMinutes(board.start_zulu);
                     const bEnd = timeToMinutes(board.end_zulu === '00:00:00' ? '06:00:00' : board.end_zulu);
                     const top = (bStart - startMin) * PX_PER_MIN;
                     const height = (bEnd - bStart) * PX_PER_MIN;
+                    const isLastBoard = boardIdx === arr.length - 1;
+                    const minH = isLastBoard ? Math.max(height, board.ojti ? 48 : 32) : Math.max(height, board.ojti ? 64 : 48);
                     return (
-                      <TouchableOpacity key={board.id} onPress={isChief ? () => { setEditingBoard(board); setEditBoardModal(true); } : null} disabled={!isChief} style={[styles.offsetBlock, { top, height: Math.max(height, 48), backgroundColor: board.users?.color_hex + '33' || '#f1f5f9', overflow: 'hidden', padding: 0, flexDirection: 'column', borderLeftWidth: 3, borderLeftColor: board.users?.color_hex || '#ccc' }]}>
+                      <TouchableOpacity key={board.id} onPress={isChief ? () => { setEditingBoard(board); setEditBoardModal(true); } : null} disabled={!isChief} style={[styles.offsetBlock, { top, height: minH, backgroundColor: board.users?.color_hex + '33' || '#f1f5f9', overflow: 'hidden', padding: 0, flexDirection: 'column', borderLeftWidth: 3, borderLeftColor: board.users?.color_hex || '#ccc' }]}>
                         {board.ojti ? (
                           <>
                             <View style={{ flex: 1, width: '100%', justifyContent: 'space-between', alignItems: 'stretch', backgroundColor: board.users?.color_hex || '#f1f5f9' }}>
@@ -502,7 +518,8 @@ export default function ScheduleScreen({ user }) {
                       </TouchableOpacity>
                     );
                   })}
-              </View>
+              </View>;
+              })()}
             </View>
           ))}
         </View>
@@ -1020,14 +1037,14 @@ const styles = StyleSheet.create({
   ojtiHalf: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   ojtiBadge: { position: 'absolute', top: 0, right: 0, width: 0, height: 0, borderStyle: 'solid', borderTopWidth: 14, borderRightWidth: 14, borderTopColor: '#7c3aed', borderRightColor: '#7c3aed', borderLeftWidth: 14, borderLeftColor: 'transparent', borderBottomWidth: 14, borderBottomColor: 'transparent' },
   ojtiBadgeIcon: { position: 'absolute', top: -12, right: -2, fontSize: 9 },
-  scheduleScrollContent: { paddingBottom: 300 },
+  scheduleScrollContent: { paddingBottom: 500 },
   emptyBlock: { marginHorizontal: 16, marginBottom: 8, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2eaf4', borderStyle: 'dashed' },
   emptyBlockText: { fontSize: 11, color: '#94a3b8', textAlign: 'center' },
   simpleBlockRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
   simpleBlockChip: { width: 110, minHeight: 85, borderRadius: 10, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 },
   simpleBlockPos: { fontSize: 9, fontWeight: '700', color: '#1a2744', opacity: 0.7 },
   simpleBlockInitial: { fontSize: 16, fontWeight: '800', color: '#1a2744', marginTop: 2 },
-  offsetTimelineWrap: { flexDirection: 'row', paddingHorizontal: 16 },
+  offsetTimelineWrap: { flexDirection: 'row', paddingHorizontal: 16, overflow: 'visible', paddingBottom: 60 },
   offsetTimeAxis: { width: 50, position: 'relative' },
   offsetTimeAxisSpacer: { height: 36 },
   offsetTimeMark: { position: 'absolute', left: 0, right: 4 },
@@ -1035,7 +1052,7 @@ const styles = StyleSheet.create({
   offsetColumn: { width: 80, marginLeft: 4 },
   offsetColumnHeader: { backgroundColor: '#1a2744', paddingVertical: 7, alignItems: 'center', borderRadius: 6, marginBottom: 4, height: 32, justifyContent: 'center' },
   offsetColumnHeaderText: { fontSize: 10, fontWeight: '800', color: '#ffffff' },
-  offsetColumnBody: { position: 'relative', backgroundColor: '#e8eef6', borderRadius: 6, overflow: 'hidden' },
+  offsetColumnBody: { position: 'relative', backgroundColor: '#e8eef6', borderRadius: 6, overflow: 'visible' },
   offsetGridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(148,163,184,0.3)' },
   offsetBlock: { position: 'absolute', left: 2, right: 2, borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
   offsetBlockInitial: { fontSize: 14, fontWeight: '800', color: '#1a2744' },
