@@ -361,7 +361,8 @@ const isChief = user?.role === 'chief';
 
                   <TouchableOpacity
                     style={styles.selector}
-                    onPress={() => setOpenDropdown(isOpen ? null : ojti.id)}
+                    onPress={isChief ? () => setOpenDropdown(isOpen ? null : ojti.id) : null}
+                    disabled={!isChief}
                   >
                     {currentRate ? (
                       <View style={styles.selectedRow}>
