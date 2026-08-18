@@ -310,10 +310,10 @@ async function buildNightSchedule({
   const nightOffCount = Math.max(0, n - (4 + sabahciCount));
 
   // Sabahci, gececi, araci once atansin, kalan gece off olsun
-  const sabahcilar = shuffled.slice(0, sabahciCount);
-  const gececilar = shuffled.slice(sabahciCount, sabahciCount + 2);
-  const aracilar = shuffled.slice(sabahciCount + 2, sabahciCount + 4);
-  const nightOffUsers = shuffled.slice(sabahciCount + 4);
+    const nightOffUsers = shuffled.slice(0, nightOffCount);
+  const sabahcilar = shuffled.slice(nightOffCount, nightOffCount + sabahciCount);
+  const gececilar = shuffled.slice(nightOffCount + sabahciCount, nightOffCount + sabahciCount + 2);
+  const aracilar = shuffled.slice(nightOffCount + sabahciCount + 2, nightOffCount + sabahciCount + 4);
 
   const noLastSlot = new Set(gececilar.map(p => p.id));
   const preferNoLastSlot = new Set(aracilar.map(p => p.id));
