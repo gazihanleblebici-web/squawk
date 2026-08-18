@@ -12,6 +12,64 @@ function minutesToTime(m) {
   return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`;
 }
 
+function boardDurationMinutes(start, end) {
+  let s = timeToMinutes(start);
+  let e = timeToMinutes(end);
+  if (e === 0) e = 24 * 60;
+  if (e < s) e += 24 * 60;
+  return e - s;
+}
+
+async function fetchNightFairnessStats(userIds, shiftTemplateId, beforeDateStr, windowDays = 60) {
+  if (!userIds.length) return {};
+  const startDate = new Date(beforeDateStr);
+  startDate.setDate(startDate.getDate() - windowDays);
+  const startStr = startDate.toISOString().split('T')[0];
+
+  const { data: schedules } = await supabase
+    .from('schedules')
+    .select('id')
+    .eq('shift_template_id', shiftTemplateId)
+    .gte('schedule_date', startStr)
+    .lt('schedule_date', beforeDateStr);
+  if (!schedules?.length) return {};
+
+  const scheduleIds = schedules.map(s => s.id);
+  const { data: boards } = await supabase
+    .from('boards')
+    .select('user_id, start_zulu, end_zulu, positions(code)')
+    .in('schedule_id', scheduleIds)
+    .in('user_id', userIds);
+  if (!boards) return {};
+
+  const stats = {};
+  userIds.forEach(id => {
+    stats[id] = { mainByPos: {}, mainTotal: 0, sabahciByPos: {}, sabahciTotal: 0, gececiTotal: 0, araciTotal: 0 };
+  });
+
+  boards.forEach(b => {
+    const st = stats[b.user_id];
+    if (!st) return;
+    const startMin = timeToMinutes(b.start_zulu);
+    const dur = boardDurationMinutes(b.start_zulu, b.end_zulu);
+    const pos = b.positions?.code;
+
+    if (startMin >= 16 * 60 && startMin < 21 * 60) {
+      if (pos) st.mainByPos[pos] = (st.mainByPos[pos] || 0) + dur;
+      st.mainTotal += dur;
+    } else if (startMin >= 21 * 60) {
+      st.gececiTotal += dur;
+    } else if (startMin < 2 * 60 + 30) {
+      st.araciTotal += dur;
+    } else if (startMin < 6 * 60) {
+      if (pos) st.sabahciByPos[pos] = (st.sabahciByPos[pos] || 0) + dur;
+      st.sabahciTotal += dur;
+    }
+  });
+
+  return stats;
+}
+
 function permutations(arr) {
   if (arr.length <= 1) return [arr];
   const result = [];
@@ -24,7 +82,7 @@ function permutations(arr) {
   return result;
 }
 
-function buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlot) {
+function buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlot, fairnessStats = null) {
   const P = positions.length;
   const N = people.length;
   const lastIdx = slots.length - 1;
@@ -37,8 +95,15 @@ function buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlo
     abstractQueue = [...abstractQueue.slice(P), ...workers];
   }
 
-  const gececiList = people.filter(p => noLastSlot.has(p.id)).sort(() => Math.random() - 0.5);
-  const nonGececi = people.filter(p => !noLastSlot.has(p.id)).sort(() => Math.random() - 0.5);
+    function fairnessSort(a, b) {
+    if (!fairnessStats) return Math.random() - 0.5;
+    const ta = fairnessStats[a.id]?.total || 0;
+    const tb = fairnessStats[b.id]?.total || 0;
+    if (ta !== tb) return ta - tb;
+    return Math.random() - 0.5;
+  }
+  const gececiList = people.filter(p => noLastSlot.has(p.id)).sort(fairnessSort);
+  const nonGececi = people.filter(p => !noLastSlot.has(p.id)).sort(fairnessSort);
 
   const safeIndices = [];
   const unsafeIndices = [];
@@ -60,10 +125,14 @@ function buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlo
     initialOrder[emptyIdx] = gececiList[gi++];
   }
 
-  const posCount = new Map();
+    const posCount = new Map();
   const lastWorked = new Map();
   people.forEach(p => {
-    posCount.set(p.id, Object.fromEntries(positions.map(pos => [pos, 0])));
+    const seeded = {};
+    positions.forEach(pos => {
+      seeded[pos] = fairnessStats?.[p.id]?.byPos?.[pos] || 0;
+    });
+    posCount.set(p.id, seeded);
     lastWorked.set(p.id, -2);
   });
 
@@ -168,17 +237,17 @@ function buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlo
   return assignments;
 }
 
-function buildRotation(people, positions, slots) {
-  return buildRotationCore(people, positions, slots, new Set(), new Set());
+function buildRotation(people, positions, slots, fairnessStats) {
+  return buildRotationCore(people, positions, slots, new Set(), new Set(), fairnessStats);
 }
 
-function buildRotationWithConstraints(people, positions, slots, noLastSlot, preferNoLastSlot) {
-  return buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlot);
+function buildRotationWithConstraints(people, positions, slots, noLastSlot, preferNoLastSlot, fairnessStats) {
+  return buildRotationCore(people, positions, slots, noLastSlot, preferNoLastSlot, fairnessStats);
 }
 
 async function buildDaySchedule({
   scheduleId, activeUsers, ojtiPairs,
-  positions, shiftBlocks, chiefTakesBoards,
+  positions, shiftBlocks, isOffsetMorning, chiefTakesBoards, selectedMorningPositions = [],
 }) {
   const block = shiftBlocks[0];
   if (!block) return { success: false, error: 'Blok bulunamadi' };
@@ -263,7 +332,7 @@ async function buildDaySchedule({
 }
 
 async function buildNightSchedule({
-  scheduleId, activeUsers, ojtiPairs,
+  scheduleId, scheduleDate, shiftTemplateId, activeUsers, ojtiPairs,
   positions, shiftBlocks, isOffsetMorning, chiefTakesBoards, selectedMorningPositions = [],
 }) {
   const block1 = shiftBlocks.find(b => b.display_type === 'hourly_table');
@@ -318,17 +387,33 @@ async function buildNightSchedule({
   const noLastSlot = new Set(gececilar.map(p => p.id));
   const preferNoLastSlot = new Set(aracilar.map(p => p.id));
 
-  // Blok 1 slotları
+    // Blok 1 slotları - Ana Nobet board suresi sabit 75 dk
+  const MAIN_SLOT_DURATION = 75;
   const b1Start = timeToMinutes(block1.start_zulu);
   const b1End = timeToMinutes(block1.end_zulu);
-  const b1SlotCount = Math.round((b1End - b1Start) / 60);
-  const b1Slots = [];
+  const b1SlotCount = Math.floor((b1End - b1Start) / MAIN_SLOT_DURATION);
+    const b1Slots = [];
   for (let i = 0; i < b1SlotCount; i++) {
-    b1Slots.push(minutesToTime(b1Start + i * 60));
+    b1Slots.push(minutesToTime(b1Start + i * MAIN_SLOT_DURATION));
   }
+  console.log('MAIN_SLOT_DURATION:', MAIN_SLOT_DURATION, 'b1Slots:', b1Slots);
+
+    const rawFairnessStats = await fetchNightFairnessStats(
+    boardPeople.map(p => p.id), shiftTemplateId, scheduleDate, 60
+  );
+
+  const b1FairnessStats = {};
+  boardPeople.forEach(p => {
+    const s = rawFairnessStats[p.id];
+    const byPos = {};
+    positions.forEach(pos => {
+      byPos[pos] = (s?.mainByPos?.[pos] || 0) / MAIN_SLOT_DURATION;
+    });
+    b1FairnessStats[p.id] = { total: s?.mainTotal || 0, byPos };
+  });
 
   const b1Assignments = buildRotationWithConstraints(
-    boardPeople, positions, b1Slots, noLastSlot, preferNoLastSlot
+    boardPeople, positions, b1Slots, noLastSlot, preferNoLastSlot, b1FairnessStats
   );
 
   // Gececi boardları
@@ -441,23 +526,7 @@ async function buildNightSchedule({
           const currentWork = workTime[currentPerson.id] + elapsed;
           const nextWork = workTime[waiting[0].person.id];
           const softMax = pos === 'PLN' ? 90 : 75;
-const shouldSwap = elapsed >= softMax || (currentWork - nextWork >= DIFF_THRESHOLD);
-if (!shouldSwap) continue;
-if (elapsed >= 90 && waiting.length === 0) {
-  const anyWaiting = sabahcilar.filter(p =>
-    p.id !== currentPerson.id &&
-    !Object.values(active).some(a => a && a.id === p.id)
-  );
-  if (anyWaiting.length > 0) {
-    anyWaiting.sort((a, b) => workTime[a.id] - workTime[b.id]);
-    const forcedIn = anyWaiting[0];
-    sabahciBoards.push({ posCode: pos, start_zulu: minutesToTime(startedAt[pos]), end_zulu: minutesToTime(t), user_id: currentPerson.id });
-    workTime[currentPerson.id] += elapsed;
-    restQueue.push({ person: currentPerson, availableAt: t + REST });
-    active[pos] = forcedIn; startedAt[pos] = t; posUsed[forcedIn.id].add(pos);
-  }
-  continue;
-} (currentWork - nextWork >= DIFF_THRESHOLD);
+          const shouldSwap = elapsed >= softMax || (currentWork - nextWork >= DIFF_THRESHOLD);
           if (!shouldSwap) continue;
 
           const outPerson = currentPerson;
@@ -532,7 +601,7 @@ if (elapsed >= 90 && waiting.length === 0) {
           user_id: a.person.id,
           ojti_user_id: ojtiA?.ojtiUserId || null,
           start_zulu: a.slot,
-          end_zulu: minutesToTime(timeToMinutes(a.slot) + 60),
+                    end_zulu: minutesToTime(timeToMinutes(a.slot) + MAIN_SLOT_DURATION),
         };
       }),
     ...[...gececiBoards, ...araciBoards, ...sabahciBoards]
@@ -671,7 +740,7 @@ export async function generateSchedule({
     });
   } else {
     return buildNightSchedule({
-      scheduleId, scheduleDate, airportId,
+      scheduleId, scheduleDate, shiftTemplateId: shiftTemplate.id, airportId,
       activeUsers, ojtiPairs: ojtiPairs || [],
       positions, shiftBlocks: shiftBlocks || [],
       isOffsetMorning, chiefTakesBoards, aitUserId, selectedMorningPositions,
